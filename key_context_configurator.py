@@ -5,6 +5,7 @@
 import os
 import re
 import shutil
+import json
 from typing import Dict, List
 from datetime import datetime
 import tkinter as tk
@@ -202,6 +203,118 @@ class EFMIKeyConfigurator:
                     except Exception as e:
                         print(f"备份 {os.path.basename(ini_file)} 失败: {e}")
         mod.has_backup = True
+    
+    def save_config(self, output_path: str = None):
+        """保存配置到JSON文件，供角色选择GUI使用"""
+        if output_path is None:
+            output_path = self.config_file
+        
+        config = {
+            "version": "1.0",
+            "generated_at": datetime.now().isoformat(),
+            "mods_directory": self.mods_directory,
+            "mods": []
+        }
+        
+        for mod in self.mods:
+            mod_data = {
+                "name": mod.name,
+                "path": mod.path,
+                "character_id": mod.character_id,
+                "key_bindings": [
+                    {
+                        "section": binding.section_name,
+                        "key": binding.key,
+                        "original_key": binding.original_key,
+                        "variable": binding.variable,
+                        "description": binding.description
+                    }
+                    for binding in mod.key_bindings
+                ]
+            }
+            config["mods"].append(mod_data)
+        
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+            print(f"配置已保存到: {output_path}")
+            return True
+        except Exception as e:
+            print(f"保存配置失败: {e}")
+            return False
+    
+    def update_gui_sections_in_mod_ini(self, mod_ini_path="mod.ini"):
+        """更新mod.ini中的GUI绘制部分"""
+        if not self.mods:
+            print("没有mod数据，跳过GUI更新")
+            return False
+        
+        try:
+            with open(mod_ini_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 生成GUI绘制代码
+            draw_code = "; === 以下由配置工具自动生成 ===\n"
+            draw_code += "; [GUI_DRAW_START]\n"
+            
+            for idx, mod in enumerate(self.mods):
+                char_id = mod.character_id
+                draw_code += f"; 绘制角色 {char_id}: {mod.name}\n"
+                draw_code += f"if $max_characters >= {char_id}\n"
+                draw_code += f"    x87 = $item_width_x\n"
+                draw_code += f"    y87 = $item_width_y\n"
+                draw_code += f"    z87 = $item_loc_x\n"
+                draw_code += f"    w87 = $item_start_y + {idx}*$item_spacing\n"
+                draw_code += f"    if $selected_character_index == {idx}\n"
+                draw_code += f"        ps-t100 = ResourceCharacter{char_id}Selected\n"
+                draw_code += f"    else\n"
+                draw_code += f"        ps-t100 = ResourceCharacter{char_id}\n"
+                draw_code += f"    endif\n"
+                draw_code += f"    Draw = 4,0\n"
+                draw_code += f"endif\n\n"
+            
+            draw_code += "; [GUI_DRAW_END]"
+            
+            # 生成资源定义代码
+            resource_code = "; === 角色资源（由配置工具自动生成）===\n"
+            resource_code += "; [GUI_RESOURCES_START]\n"
+            
+            for mod in self.mods:
+                char_id = mod.character_id
+                resource_code += f"\n[ResourceCharacter{char_id}]\n"
+                resource_code += f"filename = resources\\\\character_{char_id}.png\n"
+                resource_code += f"\n[ResourceCharacter{char_id}Selected]\n"
+                resource_code += f"filename = resources\\\\character_{char_id}_selected.png\n"
+            
+            resource_code += "; [GUI_RESOURCES_END]"
+            
+            # 替换GUI绘制部分
+            draw_pattern = r"; \[GUI_DRAW_START\].*?; \[GUI_DRAW_END\]"
+            content = re.sub(draw_pattern, draw_code, content, flags=re.DOTALL)
+            
+            # 替换资源定义部分
+            resource_pattern = r"; \[GUI_RESOURCES_START\].*?; \[GUI_RESOURCES_END\]"
+            content = re.sub(resource_pattern, resource_code, content, flags=re.DOTALL)
+            
+            # 更新max_characters
+            content = re.sub(
+                r'global \$max_characters = \d+',
+                f'global $max_characters = {len(self.mods)}',
+                content
+            )
+            
+            # 写回文件
+            with open(mod_ini_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            print(f"已更新 {mod_ini_path} 中的GUI配置")
+            return True
+            
+        except Exception as e:
+            print(f"更新GUI配置失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def modify_mod_ini(self, mod: ModInfo, key_mapping: Dict[str, str] = None, create_backup: bool = True) -> bool:
         """修改所有ini文件，添加上下文条件并统一按键"""
@@ -442,6 +555,15 @@ class KeyConfiguratorGUI:
         total_bindings = sum(len(m.key_bindings) for m in mods)
         total_ini_files = sum(len(m.ini_files) for m in mods)
         self.log(f"表格更新完成，共扫描 {total_ini_files} 个ini文件，{total_bindings} 个cycle按键绑定")
+        
+        # 保存配置文件供角色选择GUI使用
+        if self.configurator.save_config():
+            self.log(f"✓ 配置已保存到 {self.configurator.config_file}")
+        
+        # 更新mod.ini中的GUI配置
+        if self.configurator.update_gui_sections_in_mod_ini():
+            self.log(f"✓ 已更新 mod.ini 中的GUI绘制代码（{len(mods)}个角色）")
+            self.log("提示: 运行 python generate_gui_resources.py 生成GUI图片")
     
     
     def _apply_changes(self):
