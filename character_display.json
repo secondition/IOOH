@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-02-12T01:27:44.649639",
+  "total_characters": 2,
+  "id_to_name": {
+    "0": "莱万汀",
+    "1": "佩丽卡"
+  },
+  "characters": [
+    {
+      "character_id": 0,
+      "display_name": "莱万汀",
+      "mod_name": "laevatain_mk3l_7fa3f",
+      "key_count": 13,
+      "has_detection": true
+    },
+    {
+      "character_id": 1,
+      "display_name": "佩丽卡",
+      "mod_name": "佩丽卡",
+      "key_count": 7,
+      "has_detection": true
+    }
+  ]
+}

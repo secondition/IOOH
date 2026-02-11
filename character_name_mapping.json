@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "description": "角色名称映射字典 - 用于游戏内UI显示",
+  "match_rules": [
+    {
+      "keywords": ["laevatain", "莱万汀", "雷瓦汀"],
+      "display_name": "莱万汀"
+    },
+    {
+      "keywords": ["perlica", "pelica", "佩丽卡"],
+      "display_name": "佩丽卡"
+    },
+    {
+      "keywords": ["endmin", "恩德敏"],
+      "display_name": "恩德敏"
+    },
+    {
+      "keywords": ["catalina", "卡塔琳娜"],
+      "display_name": "卡塔琳娜"
+    }
+  ],
+  "notes": [
+    "匹配规则：不区分大小写，包含任一关键词即匹配",
+    "未匹配的mod将显示原始mod名称",
+    "可自行添加新的角色映射规则"
+  ]
+}

@@ -292,48 +292,6 @@ class EFMIKeyConfigurator:
             print(f"保存配置失败: {e}")
             return False
     
-    def update_main_control_ini(self, main_ini_path: str = None) -> bool:
-        """更新主控mod.ini中的角色ID映射列表"""
-        if main_ini_path is None:
-            main_ini_path = os.path.join(os.path.dirname(__file__), "mod.ini")
-        
-        if not os.path.exists(main_ini_path):
-            print(f"主控mod.ini不存在: {main_ini_path}")
-            return False
-        
-        try:
-            with open(main_ini_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # 生成角色ID映射列表
-            mapping_lines = ["; [GENERATED_START] - 角色ID映射（自动生成）"]
-            for mod in self.mods:
-                key_count = len(mod.key_bindings)
-                detection_status = "有检测" if mod.has_character_detection else "无检测"
-                mapping_lines.append(f"; ID {mod.character_id} = {mod.name} ({key_count}个按键, {detection_status})")
-            mapping_lines.append("; [GENERATED_END]")
-            mapping_block = "\n".join(mapping_lines)
-            
-            # 查找并替换[GENERATED_START]到[GENERATED_END]之间的内容
-            pattern = r'; \[GENERATED_START\].*?; \[GENERATED_END\]'
-            if re.search(pattern, content, re.DOTALL):
-                # 替换已存在的映射
-                new_content = re.sub(pattern, mapping_block, content, flags=re.DOTALL)
-            else:
-                # 在文件末尾添加映射
-                new_content = content.rstrip() + "\n\n" + mapping_block + "\n"
-            
-            # 写回文件
-            with open(main_ini_path, 'w', encoding='utf-8') as f:
-                f.write(new_content)
-            
-            print(f"✓ 已更新主控mod.ini中的角色ID映射 ({len(self.mods)}个角色)")
-            return True
-            
-        except Exception as e:
-            print(f"更新主控mod.ini失败: {e}")
-            return False
-    
     def insert_selector_control_to_mod(self, mod: ModInfo) -> bool:
         """为mod的ini文件插入选择器控制代码"""
         try:
@@ -660,9 +618,23 @@ class KeyConfiguratorGUI:
         if self.configurator.save_config():
             self.log(f"✓ 配置已保存到 {self.configurator.config_file}")
         
-        # 更新主控mod.ini中的角色ID映射
-        if self.configurator.update_main_control_ini():
-            self.log(f"✓ 已更新主控mod.ini中的角色ID映射")
+        # 生成角色显示配置（游戏内UI）
+        self.log("")
+        self.log("步骤3：生成游戏内显示配置...")
+        try:
+            from generate_character_display import CharacterDisplayGenerator
+            display_gen = CharacterDisplayGenerator()
+            if display_gen.generate_display_config():
+                self.log("✓ 已生成角色显示配置 (character_display.json)")
+                if display_gen.update_main_ini():
+                    self.log("✓ 已添加游戏内文本显示功能到 mod.ini")
+                else:
+                    self.log("⚠ 更新显示代码失败，请手动运行 generate_character_display.py")
+            else:
+                self.log("⚠ 生成显示配置失败")
+        except Exception as e:
+            self.log(f"⚠ 无法生成显示配置: {e}")
+            self.log("提示：可手动运行 generate_character_display.py 生成")
         
         # 显示完成信息
         self.log("")
@@ -671,7 +643,10 @@ class KeyConfiguratorGUI:
         self.log(f"1. 每个mod已添加选择器控制（↑↓键切换角色0-{len(mods)-1}）")
         self.log("2. 小键盘按键只在对应角色ID被选中时生效")
         self.log("3. 所有mod同步计算$selected_character变量")
-        self.log(f"4. 角色ID映射已写入 mod.ini（共{len(mods)}个角色）")
+        self.log("4. 游戏内按Enter键切换UI显示/隐藏")
+        self.log("5. 编辑 character_name_mapping.json 可自定义角色名称")
+        self.log("")
+        self.log("提示：运行 python generate_character_display.py 可单独更新UI")
         self.log("=" * 60)
     
     
