@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""EFMI Key Context Configurator - EFMI按键上下文配置工具"""
+"""EFMI Key Context Configurator - EFMI按键上下文配置工具 v3.0（重构版）
+
+核心机制：选择器伪共享
+- 所有mod同步计算$selected_character变量
+- 通过↑↓键全局输入实现变量同步
+- 双重condition判断：角色在场 && 选中匹配
+"""
 
 import os
 import re
 import shutil
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, simpledialog
@@ -29,10 +35,11 @@ class ModInfo:
         self.name = name
         self.path = path
         self.ini_files = ini_files or []
-        self.character_id = 0
+        self.character_id = 0  # 角色ID（用于选择器变量）
         self.key_bindings: List[ModKeyBinding] = []
         self.has_backup = False
         self.ini_file_backups: Dict[str, bool] = {}
+        self.has_character_detection = False  # 是否已有角色检测变量
 
 
 class EFMIKeyConfigurator:
@@ -44,18 +51,18 @@ class EFMIKeyConfigurator:
         self.config_file = "efmi_key_config.json"
         
     def scan_mods(self, directory: str) -> List[ModInfo]:
-        """扫描目录下的所有mod，检测所有.ini文件"""
+        """扫描目录下的所有mod，检测所有.ini文件和角色hash"""
         self.mods_directory = directory
         self.mods.clear()
         
         # 获取当前脚本所在目录名，用于跳过自身
-        current_dir_name = "EFMI_KeyContext_Manager"
+        current_dir_name = os.path.basename(directory)
         
         for item in os.listdir(directory):
             item_path = os.path.join(directory, item)
             
-            # 跳过自身目录和隐藏文件夹
-            if item == current_dir_name or item.startswith('.'):
+            # 跳过隐藏文件夹
+            if item.startswith('.') or item.startswith('EFMI'):
                 continue
             
             if os.path.isdir(item_path):
@@ -73,6 +80,9 @@ class EFMIKeyConfigurator:
                     # 解析所有ini文件
                     for ini_file in ini_files:
                         self._parse_ini_file(mod, ini_file)
+                        # 检查是否已有角色检测变量
+                        if self._check_has_character_detection(ini_file):
+                            mod.has_character_detection = True
                     
                     # 只添加有type=cycle按键绑定的mod（模型切换功能）
                     if mod.key_bindings:
@@ -82,10 +92,31 @@ class EFMIKeyConfigurator:
         self.mods.sort(key=lambda m: m.name)
         
         # 自动分配character ID
-        for idx, mod in enumerate(self.mods, start=1):
+        for idx, mod in enumerate(self.mods):
             mod.character_id = idx
             
         return self.mods
+    
+    def _check_has_character_detection(self, ini_file: str) -> bool:
+        """检查ini文件是否已有角色检测变量（如$active, $object_detected等）"""
+        try:
+            with open(ini_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 查找常见的角色检测变量
+            detection_patterns = [
+                r'\$active\d*\s*=\s*[01]',
+                r'\$object_detected\s*=\s*[01]',
+                r'\$mod_enabled\s*=\s*[01]'
+            ]
+            
+            for pattern in detection_patterns:
+                if re.search(pattern, content):
+                    return True
+            return False
+            
+        except Exception:
+            return False
     
     def _parse_ini_file(self, mod: ModInfo, ini_file_path: str):
         """解析ini文件，提取按键绑定 - 通用检测所有按键section"""
@@ -164,7 +195,8 @@ class EFMIKeyConfigurator:
         return " ".join(desc_parts) if desc_parts else section_name
     
     def auto_assign_keys_sequential(self):
-        """按检测顺序自动分配小键盘按键（0-9，加减乘除，小数点，共15个）"""
+        """按检测顺序自动分配小键盘按键（0-9，加减乘除，小数点，共15个）
+        单个mod内相同的原始键位将分配相同的新键位"""
         numpad_keys = [
             # 数字键 0-9 (10个)
             "VK_NUMPAD0", "VK_NUMPAD1", "VK_NUMPAD2", "VK_NUMPAD3", "VK_NUMPAD4",
@@ -178,18 +210,33 @@ class EFMIKeyConfigurator:
             "VK_DECIMAL"    # . 小数点
         ]
         
+        # 对每个mod单独处理
         for mod in self.mods:
-            # 为每个mod的按键绑定按顺序分配小键盘按键
-            for idx, binding in enumerate(mod.key_bindings):
-                if idx < len(numpad_keys):
-                    # 记录原始按键用于对比
-                    binding.original_key = binding.key
-                    # 分配新按键
-                    binding.key = numpad_keys[idx]
-                else:
-                    # 超过15个按键的，保持原按键不变并记录警告
-                    binding.original_key = binding.key
-                    print(f"警告: {mod.name} 的第 {idx+1} 个按键超出分配范围，保持原按键 {binding.key}")
+            # 为当前mod建立原始键位到新键位的映射表
+            mod_key_mapping = {}
+            available_keys = list(numpad_keys)
+            
+            # 记录原始按键并分配新键位
+            for binding in mod.key_bindings:
+                binding.original_key = binding.key
+                
+                # 如果这个原始键位在当前mod中还没有分配过
+                if binding.original_key not in mod_key_mapping:
+                    if available_keys:
+                        # 为这个原始键位分配一个新键位
+                        new_key = available_keys.pop(0)
+                        mod_key_mapping[binding.original_key] = new_key
+                    else:
+                        # 如果小键盘按键用完了，保持原按键
+                        mod_key_mapping[binding.original_key] = binding.original_key
+                        print(f"警告: {mod.name} 的小键盘按键已用完，{binding.original_key} 保持不变")
+                
+                # 应用映射（相同原始键位会得到相同的新键位）
+                binding.key = mod_key_mapping[binding.original_key]
+            
+            # 输出当前mod的映射情况
+            if len(mod_key_mapping) < len(mod.key_bindings):
+                print(f"{mod.name}: {len(mod.key_bindings)}个按键绑定 -> {len(mod_key_mapping)}个不同键位")
     
     def backup_mod(self, mod: ModInfo):
         """备份所有ini文件"""
@@ -205,14 +252,15 @@ class EFMIKeyConfigurator:
         mod.has_backup = True
     
     def save_config(self, output_path: str = None):
-        """保存配置到JSON文件，供角色选择GUI使用"""
+        """保存配置到JSON文件"""
         if output_path is None:
             output_path = self.config_file
         
         config = {
-            "version": "1.0",
+            "version": "3.0",
             "generated_at": datetime.now().isoformat(),
             "mods_directory": self.mods_directory,
+            "total_characters": len(self.mods),
             "mods": []
         }
         
@@ -221,6 +269,7 @@ class EFMIKeyConfigurator:
                 "name": mod.name,
                 "path": mod.path,
                 "character_id": mod.character_id,
+                "has_character_detection": mod.has_character_detection,
                 "key_bindings": [
                     {
                         "section": binding.section_name,
@@ -243,81 +292,113 @@ class EFMIKeyConfigurator:
             print(f"保存配置失败: {e}")
             return False
     
-    def update_gui_sections_in_mod_ini(self, mod_ini_path="mod.ini"):
-        """更新mod.ini中的GUI绘制部分"""
-        if not self.mods:
-            print("没有mod数据，跳过GUI更新")
+    def update_main_control_ini(self, main_ini_path: str = None) -> bool:
+        """更新主控mod.ini中的角色ID映射列表"""
+        if main_ini_path is None:
+            main_ini_path = os.path.join(os.path.dirname(__file__), "mod.ini")
+        
+        if not os.path.exists(main_ini_path):
+            print(f"主控mod.ini不存在: {main_ini_path}")
             return False
         
         try:
-            with open(mod_ini_path, 'r', encoding='utf-8') as f:
+            with open(main_ini_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # 生成GUI绘制代码
-            draw_code = "; === 以下由配置工具自动生成 ===\n"
-            draw_code += "; [GUI_DRAW_START]\n"
-            
-            for idx, mod in enumerate(self.mods):
-                char_id = mod.character_id
-                draw_code += f"; 绘制角色 {char_id}: {mod.name}\n"
-                draw_code += f"if $max_characters >= {char_id}\n"
-                draw_code += f"    x87 = $item_width_x\n"
-                draw_code += f"    y87 = $item_width_y\n"
-                draw_code += f"    z87 = $item_loc_x\n"
-                draw_code += f"    w87 = $item_start_y + {idx}*$item_spacing\n"
-                draw_code += f"    if $selected_character_index == {idx}\n"
-                draw_code += f"        ps-t100 = ResourceCharacter{char_id}Selected\n"
-                draw_code += f"    else\n"
-                draw_code += f"        ps-t100 = ResourceCharacter{char_id}\n"
-                draw_code += f"    endif\n"
-                draw_code += f"    Draw = 4,0\n"
-                draw_code += f"endif\n\n"
-            
-            draw_code += "; [GUI_DRAW_END]"
-            
-            # 生成资源定义代码
-            resource_code = "; === 角色资源（由配置工具自动生成）===\n"
-            resource_code += "; [GUI_RESOURCES_START]\n"
-            
+            # 生成角色ID映射列表
+            mapping_lines = ["; [GENERATED_START] - 角色ID映射（自动生成）"]
             for mod in self.mods:
-                char_id = mod.character_id
-                resource_code += f"\n[ResourceCharacter{char_id}]\n"
-                resource_code += f"filename = resources\\\\character_{char_id}.png\n"
-                resource_code += f"\n[ResourceCharacter{char_id}Selected]\n"
-                resource_code += f"filename = resources\\\\character_{char_id}_selected.png\n"
+                key_count = len(mod.key_bindings)
+                detection_status = "有检测" if mod.has_character_detection else "无检测"
+                mapping_lines.append(f"; ID {mod.character_id} = {mod.name} ({key_count}个按键, {detection_status})")
+            mapping_lines.append("; [GENERATED_END]")
+            mapping_block = "\n".join(mapping_lines)
             
-            resource_code += "; [GUI_RESOURCES_END]"
-            
-            # 替换GUI绘制部分
-            draw_pattern = r"; \[GUI_DRAW_START\].*?; \[GUI_DRAW_END\]"
-            content = re.sub(draw_pattern, draw_code, content, flags=re.DOTALL)
-            
-            # 替换资源定义部分
-            resource_pattern = r"; \[GUI_RESOURCES_START\].*?; \[GUI_RESOURCES_END\]"
-            content = re.sub(resource_pattern, resource_code, content, flags=re.DOTALL)
-            
-            # 更新max_characters
-            content = re.sub(
-                r'global \$max_characters = \d+',
-                f'global $max_characters = {len(self.mods)}',
-                content
-            )
+            # 查找并替换[GENERATED_START]到[GENERATED_END]之间的内容
+            pattern = r'; \[GENERATED_START\].*?; \[GENERATED_END\]'
+            if re.search(pattern, content, re.DOTALL):
+                # 替换已存在的映射
+                new_content = re.sub(pattern, mapping_block, content, flags=re.DOTALL)
+            else:
+                # 在文件末尾添加映射
+                new_content = content.rstrip() + "\n\n" + mapping_block + "\n"
             
             # 写回文件
-            with open(mod_ini_path, 'w', encoding='utf-8') as f:
-                f.write(content)
+            with open(main_ini_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
             
-            print(f"已更新 {mod_ini_path} 中的GUI配置")
+            print(f"✓ 已更新主控mod.ini中的角色ID映射 ({len(self.mods)}个角色)")
             return True
             
         except Exception as e:
-            print(f"更新GUI配置失败: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"更新主控mod.ini失败: {e}")
+            return False
+    
+    def insert_selector_control_to_mod(self, mod: ModInfo) -> bool:
+        """为mod的ini文件插入选择器控制代码"""
+        try:
+            # 获取主ini文件（通常是第一个或最大的）
+            main_ini = mod.ini_files[0] if mod.ini_files else None
+            if not main_ini:
+                return False
+            
+            with open(main_ini, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 生成选择器控制代码
+            selector_code = f"""\n; ===== 角色选择器控制（由EFMI工具自动生成）=====
+[Constants]
+global persist $selected_character = 0  ; 当前选中的角色ID (0-{len(self.mods)-1})
+
+[KeySelectUp]
+key = VK_UP
+type = standard
+run = CommandListSelectUp
+
+[CommandListSelectUp]
+if $selected_character > 0
+    $selected_character = $selected_character - 1
+else
+    $selected_character = {len(self.mods) - 1}
+endif
+
+[KeySelectDown]
+key = VK_DOWN
+type = standard
+run = CommandListSelectDown
+
+[CommandListSelectDown]
+if $selected_character < {len(self.mods) - 1}
+    $selected_character = $selected_character + 1
+else
+    $selected_character = 0
+endif
+; ===== 选择器控制结束 =====\n\n"""
+            
+            # 查找Constants section，在其后插入
+            constants_pattern = r'\[Constants\].*?(?=\n\[|$)'
+            constants_match = re.search(constants_pattern, content, re.DOTALL)
+            
+            if constants_match:
+                # 在Constants section后插入
+                insert_pos = constants_match.end()
+                content = content[:insert_pos] + selector_code + content[insert_pos:]
+            else:
+                # 如果没有Constants，在文件开头插入
+                content = selector_code + content
+            
+            # 写回文件
+            with open(main_ini, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            return True
+            
+        except Exception as e:
+            print(f"插入选择器控制到 {mod.name} 失败: {e}")
             return False
     
     def modify_mod_ini(self, mod: ModInfo, key_mapping: Dict[str, str] = None, create_backup: bool = True) -> bool:
-        """修改所有ini文件，添加上下文条件并统一按键"""
+        """修改所有ini文件，添加选择器判断并统一按键"""
         try:
             # 备份所有ini文件（仅在需要时）
             if create_backup:
@@ -352,10 +433,17 @@ class EFMIKeyConfigurator:
                     
                     if match:
                         old_section = match.group(0)
+                        # 获取原始condition（如果有）
+                        original_condition = None
+                        condition_match = re.search(r'condition\s*=\s*(.+)', old_section)
+                        if condition_match:
+                            original_condition = condition_match.group(1).strip()
+                        
                         new_section = self._modify_key_section_with_context(
                             old_section, 
                             mod.character_id,
-                            binding.key
+                            binding.key,
+                            original_condition
                         )
                         content = content.replace(old_section, new_section, 1)
                 
@@ -371,13 +459,12 @@ class EFMIKeyConfigurator:
             traceback.print_exc()
             return False
     
-    def _modify_key_section_with_context(self, section_content: str, character_id: int, new_key: str) -> str:
-        """修改单个按键section，添加上下文条件和新按键"""
+    def _modify_key_section_with_context(self, section_content: str, character_id: int, new_key: str, original_condition: str = None) -> str:
+        """修改单个按键section，添加选择器判断和新按键"""
         lines = section_content.split('\n')
         modified_lines = []
         has_condition = False
         key_line_index = -1
-        condition_line_index = -1
         
         for i, line in enumerate(lines):
             stripped = line.strip()
@@ -391,17 +478,13 @@ class EFMIKeyConfigurator:
             # 找到condition行
             elif stripped.startswith('condition =') or stripped.startswith('condition='):
                 has_condition = True
-                condition_line_index = i
-                # 添加character ID条件
-                if '$active_character' not in line:
-                    # 提取现有条件
-                    condition_match = re.search(r'condition\s*=\s*(.+)', line)
-                    if condition_match:
-                        existing_condition = condition_match.group(1).strip()
-                        indent = line[:len(line) - len(line.lstrip())]
-                        modified_lines.append(f'{indent}condition = {existing_condition} && $active_character == {character_id}')
-                    else:
-                        modified_lines.append(line)
+                # 提取现有条件
+                condition_match = re.search(r'condition\s*=\s*(.+)', line)
+                if condition_match:
+                    existing_condition = condition_match.group(1).strip()
+                    # 添加选择器判断
+                    indent = line[:len(line) - len(line.lstrip())]
+                    modified_lines.append(f'{indent}condition = {existing_condition} && $selected_character == {character_id}')
                 else:
                     modified_lines.append(line)
             else:
@@ -409,11 +492,14 @@ class EFMIKeyConfigurator:
         
         # 如果没有condition，在key行后添加一个
         if not has_condition and key_line_index >= 0:
-            # 获取缩进
             key_line = modified_lines[key_line_index]
             indent = key_line[:len(key_line) - len(key_line.lstrip())]
-            # 在key行后插入condition
-            modified_lines.insert(key_line_index + 1, f'{indent}condition = $active_character == {character_id}')
+            # 如果有原始condition（从扫描时保存），使用它
+            if original_condition:
+                modified_lines.insert(key_line_index + 1, f'{indent}condition = {original_condition} && $selected_character == {character_id}')
+            else:
+                # 否则只判断选择器
+                modified_lines.insert(key_line_index + 1, f'{indent}condition = $selected_character == {character_id}')
         
         return '\n'.join(modified_lines)
 
@@ -452,22 +538,24 @@ class KeyConfiguratorGUI:
         main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # 创建表格
-        columns = ("mod_name", "char_id", "function", "current_key", "new_key", "status")
+        columns = ("mod_name", "char_id", "detection", "function", "current_key", "new_key", "status")
         self.tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
         
         self.tree.heading("mod_name", text="Mod名称")
         self.tree.heading("char_id", text="角色ID")
+        self.tree.heading("detection", text="检测变量")
         self.tree.heading("function", text="功能说明")
         self.tree.heading("current_key", text="原始按键")
         self.tree.heading("new_key", text="新按键（当前配置）- 双击修改")
         self.tree.heading("status", text="状态")
         
-        self.tree.column("mod_name", width=200)
-        self.tree.column("char_id", width=80)
-        self.tree.column("function", width=150)
-        self.tree.column("current_key", width=120)
-        self.tree.column("new_key", width=120)
-        self.tree.column("status", width=150)
+        self.tree.column("mod_name", width=180)
+        self.tree.column("char_id", width=60)
+        self.tree.column("detection", width=80)
+        self.tree.column("function", width=120)
+        self.tree.column("current_key", width=100)
+        self.tree.column("new_key", width=100)
+        self.tree.column("status", width=120)
         
         # 滚动条
         scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -509,10 +597,11 @@ class KeyConfiguratorGUI:
         for mod in mods:
             ini_names = [os.path.basename(f) for f in mod.ini_files]
             key_count = len(mod.key_bindings)
+            detection_info = "有检测" if mod.has_character_detection else "无检测"
             if key_count > 15:
-                self.log(f"  ⚠ {mod.name}: {', '.join(ini_names)} ({key_count}个cycle按键，超过15个)")
+                self.log(f"  ⚠ {mod.name}: {', '.join(ini_names)} ({key_count}个cycle按键，超过15个) [{detection_info}]")
             else:
-                self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个cycle按键)")
+                self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个cycle按键) [{detection_info}]")
         
         # 清空表格
         for item in self.tree.get_children():
@@ -529,15 +618,25 @@ class KeyConfiguratorGUI:
         
         # 立即执行备份和修改
         self.log("开始自动备份并修改配置文件...")
+        self.log("步骤1：为每个mod插入选择器控制代码...")
+        selector_count = 0
+        for mod in mods:
+            if self.configurator.insert_selector_control_to_mod(mod):
+                selector_count += 1
+                self.log(f"  ✓ {mod.name} 已插入选择器控制（ID={mod.character_id}）")
+            else:
+                self.log(f"  ✗ {mod.name} 插入选择器失败")
+        
+        self.log(f"步骤2：修改按键绑定为双重condition...")
         success_count = 0
         for mod in mods:
             if self.configurator.modify_mod_ini(mod):
                 success_count += 1
-                self.log(f"✓ {mod.name} 已自动配置 (ID={mod.character_id}, {len(mod.key_bindings)}个按键)")
+                self.log(f"  ✓ {mod.name} 按键已配置 (ID={mod.character_id}, {len(mod.key_bindings)}个按键)")
             else:
-                self.log(f"✗ {mod.name} 配置失败")
+                self.log(f"  ✗ {mod.name} 配置失败")
         
-        self.log(f"自动配置完成: {success_count}/{len(mods)} 个mod成功")
+        self.log(f"自动配置完成: 选择器{selector_count}/{len(mods)}, 按键{success_count}/{len(mods)}")
         self.log('提示：双击"新按键"列可以手动修改，然后点击"保存"按钮更新配置')
         
         # 填充表格
@@ -546,6 +645,7 @@ class KeyConfiguratorGUI:
                 self.tree.insert("", tk.END, values=(
                     mod.name,
                     mod.character_id,
+                    "✓" if mod.has_character_detection else "✗",
                     binding.description,
                     binding.original_key,  # 显示修改前的原始按键
                     binding.key,           # 显示当前配置的新按键
@@ -556,14 +656,23 @@ class KeyConfiguratorGUI:
         total_ini_files = sum(len(m.ini_files) for m in mods)
         self.log(f"表格更新完成，共扫描 {total_ini_files} 个ini文件，{total_bindings} 个cycle按键绑定")
         
-        # 保存配置文件供角色选择GUI使用
+        # 保存配置文件
         if self.configurator.save_config():
             self.log(f"✓ 配置已保存到 {self.configurator.config_file}")
         
-        # 更新mod.ini中的GUI配置
-        if self.configurator.update_gui_sections_in_mod_ini():
-            self.log(f"✓ 已更新 mod.ini 中的GUI绘制代码（{len(mods)}个角色）")
-            self.log("提示: 运行 python generate_gui_resources.py 生成GUI图片")
+        # 更新主控mod.ini中的角色ID映射
+        if self.configurator.update_main_control_ini():
+            self.log(f"✓ 已更新主控mod.ini中的角色ID映射")
+        
+        # 显示完成信息
+        self.log("")
+        self.log("=" * 60)
+        self.log("配置完成！使用说明：")
+        self.log(f"1. 每个mod已添加选择器控制（↑↓键切换角色0-{len(mods)-1}）")
+        self.log("2. 小键盘按键只在对应角色ID被选中时生效")
+        self.log("3. 所有mod同步计算$selected_character变量")
+        self.log(f"4. 角色ID映射已写入 mod.ini（共{len(mods)}个角色）")
+        self.log("=" * 60)
     
     
     def _apply_changes(self):
@@ -660,31 +769,6 @@ class KeyConfiguratorGUI:
         self.root.mainloop()
 
 
-class CharacterSelectorWindow:
-    """角色选择器配置窗口"""
-    
-    def __init__(self, parent, mods: List[ModInfo], main_gui):
-        self.parent = parent
-        self.mods = mods
-        self.main_gui = main_gui
-        self.window = None
-    
-    def show(self):
-        """显示配置窗口"""
-        self.window = tk.Toplevel(self.parent)
-        self.window.title("角色选择GUI配置")
-        self.window.geometry("800x600")
-    
-    def log(self, message: str):
-        """添加日志"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
-        self.log_text.see(tk.END)
-        self.root.update()
-    
-    def run(self):
-        """运行GUI"""
-        self.root.mainloop()
 
 
 def main():

@@ -1,12 +1,14 @@
 {
-  "version": "1.0",
-  "generated_at": "2026-02-11T18:21:18.088798",
+  "version": "3.0",
+  "generated_at": "2026-02-12T01:10:14.447031",
   "mods_directory": "D:/ikun/Downloads/endfield/mods",
+  "total_characters": 2,
   "mods": [
     {
       "name": "laevatain_mk3l_7fa3f",
       "path": "D:/ikun/Downloads/endfield/mods\\laevatain_mk3l_7fa3f",
-      "character_id": 1,
+      "character_id": 0,
+      "has_character_detection": true,
       "key_bindings": [
         {
           "section": "KeySwap_0",
@@ -31,71 +33,71 @@
         },
         {
           "section": "KeySwap_3",
-          "key": "VK_NUMPAD3",
-          "original_key": "VK_NUMPAD3",
+          "key": "VK_NUMPAD2",
+          "original_key": "VK_NUMPAD2",
           "variable": "$active0",
           "description": "Swap_3 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_4",
-          "key": "VK_NUMPAD4",
-          "original_key": "VK_NUMPAD4",
+          "key": "VK_NUMPAD3",
+          "original_key": "VK_NUMPAD3",
           "variable": "$active0",
           "description": "Swap_4 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_5",
-          "key": "VK_NUMPAD5",
-          "original_key": "VK_NUMPAD5",
+          "key": "VK_NUMPAD4",
+          "original_key": "VK_NUMPAD4",
           "variable": "$active0",
           "description": "Swap_5 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_6",
-          "key": "VK_NUMPAD6",
-          "original_key": "VK_NUMPAD6",
+          "key": "VK_NUMPAD5",
+          "original_key": "VK_NUMPAD5",
           "variable": "$active0",
           "description": "Swap_6 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_7",
-          "key": "VK_NUMPAD7",
-          "original_key": "VK_NUMPAD7",
+          "key": "VK_NUMPAD6",
+          "original_key": "VK_NUMPAD6",
           "variable": "$active0",
           "description": "Swap_7 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_8",
-          "key": "VK_NUMPAD8",
-          "original_key": "VK_NUMPAD8",
+          "key": "VK_NUMPAD7",
+          "original_key": "VK_NUMPAD7",
           "variable": "$active0",
           "description": "Swap_8 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_9",
-          "key": "VK_NUMPAD9",
-          "original_key": "VK_NUMPAD9",
+          "key": "VK_NUMPAD8",
+          "original_key": "VK_NUMPAD8",
           "variable": "$active0",
           "description": "Swap_9 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_10",
-          "key": "VK_ADD",
-          "original_key": "VK_ADD",
+          "key": "VK_NUMPAD9",
+          "original_key": "VK_NUMPAD9",
           "variable": "$active0",
           "description": "Swap_10 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_11",
-          "key": "VK_SUBTRACT",
-          "original_key": "VK_SUBTRACT",
+          "key": "VK_NUMPAD2",
+          "original_key": "VK_NUMPAD2",
           "variable": "$active0",
           "description": "Swap_11 (cycle) [$active0]"
         },
         {
           "section": "KeySwap_12",
-          "key": "VK_MULTIPLY",
-          "original_key": "VK_MULTIPLY",
+          "key": "VK_ADD",
+          "original_key": "VK_ADD",
           "variable": "$active0",
           "description": "Swap_12 (cycle) [$active0]"
         }
@@ -104,7 +106,8 @@
     {
       "name": "佩丽卡",
       "path": "D:/ikun/Downloads/endfield/mods\\佩丽卡",
-      "character_id": 2,
+      "character_id": 1,
+      "has_character_detection": true,
       "key_bindings": [
         {
           "section": "Keynipples",
@@ -115,43 +118,43 @@
         },
         {
           "section": "Keyyifu",
-          "key": "VK_NUMPAD1",
-          "original_key": "VK_NUMPAD1",
+          "key": "VK_NUMPAD0",
+          "original_key": "VK_NUMPAD0",
           "variable": "$active_character",
           "description": "yifu (cycle) [$active_character]"
         },
         {
           "section": "Keycoat",
-          "key": "VK_NUMPAD2",
-          "original_key": "VK_NUMPAD2",
+          "key": "VK_NUMPAD1",
+          "original_key": "VK_NUMPAD1",
           "variable": "$active_character",
           "description": "coat (cycle) [$active_character]"
         },
         {
           "section": "Keyshoes",
-          "key": "VK_NUMPAD3",
-          "original_key": "VK_NUMPAD3",
+          "key": "VK_NUMPAD2",
+          "original_key": "VK_NUMPAD2",
           "variable": "$active_character",
           "description": "shoes (cycle) [$active_character]"
         },
         {
           "section": "Keyheisi",
-          "key": "VK_NUMPAD4",
+          "key": "VK_NUMPAD3",
           "original_key": "VK_RIGHT",
           "variable": "$heisi",
           "description": "heisi (cycle) [$heisi]"
         },
         {
           "section": "Keyequip",
-          "key": "VK_NUMPAD5",
-          "original_key": "VK_NUMPAD5",
+          "key": "VK_NUMPAD1",
+          "original_key": "VK_NUMPAD1",
           "variable": "$active_character",
           "description": "equip (cycle) [$active_character]"
         },
         {
           "section": "Keybaosha",
-          "key": "VK_NUMPAD6",
-          "original_key": "VK_NUMPAD6",
+          "key": "VK_NUMPAD0",
+          "original_key": "VK_NUMPAD0",
           "variable": "$active_character",
           "description": "baosha (cycle) [$active_character]"
         }
