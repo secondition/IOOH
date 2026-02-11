@@ -163,15 +163,15 @@ class EFMIKeyConfigurator:
         return " ".join(desc_parts) if desc_parts else section_name
     
     def auto_assign_keys_sequential(self):
-        """按检测顺序自动分配小键盘按键（数字+运算符+小数点，共15个）"""
+        """按检测顺序自动分配小键盘按键（0-9，加减乘除，小数点，共15个）"""
         numpad_keys = [
             # 数字键 0-9 (10个)
             "VK_NUMPAD0", "VK_NUMPAD1", "VK_NUMPAD2", "VK_NUMPAD3", "VK_NUMPAD4",
             "VK_NUMPAD5", "VK_NUMPAD6", "VK_NUMPAD7", "VK_NUMPAD8", "VK_NUMPAD9",
             # 运算符键 (4个)
-            "VK_MULTIPLY",  # * 乘号
             "VK_ADD",       # + 加号
             "VK_SUBTRACT",  # - 减号
+            "VK_MULTIPLY",  # * 乘号
             "VK_DIVIDE",    # / 除号
             # 小数点 (1个)
             "VK_DECIMAL"    # . 小数点
