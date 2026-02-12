@@ -23,7 +23,6 @@ Thumbs.db
 # Generated files
 *.log
 efmi_key_config.json
-install_notes.txt
 
 # Generated UI textures
 resources/

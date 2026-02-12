@@ -14,6 +14,8 @@ import re
 import shutil
 import json
 import stat
+import subprocess
+import sys
 from typing import Dict, List
 from datetime import datetime
 import tkinter as tk
@@ -524,40 +526,6 @@ filename = resources\\textures\\help_Enter__显示_隐藏UI.png
             print(f"生成主配置失败: {e}")
             return False
     
-    def generate_d3dx_snippet(self, output_path: str = None) -> bool:
-        """生成安装说明文件
-
-        各mod使用本地选择器变量 $iooh_s<id>，
-        不再需要跨文件引用。无需修改 d3dx.ini。
-        """
-        if output_path is None:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            output_path = os.path.join(script_dir, "install_notes.txt")
-        
-        content = f"""===== IOOH 安装说明 =====
-
-每个mod拥有本地选择器变量 $iooh_s<id>，
-各mod自带 VK_UP/VK_DOWN 处理器保持同步。
-无需修改 d3dx.ini。
-
-角色ID映射 (0~{len(self.mods) - 1})：
-"""
-        for mod in self.mods:
-            content += f"  {mod.character_id} = {mod.name}\n"
-        
-        content += f"""\n使用说明：
-  ↑↓ 切换角色 | Enter 显示/隐藏UI | 小键盘 控制功能
-"""
-        
-        try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            print(f"安装说明已生成: {output_path}")
-            return True
-        except Exception as e:
-            print(f"生成安装说明失败: {e}")
-            return False
-
     def auto_assign_keys_sequential(self):
         """按检测顺序自动分配小键盘按键（0-9，加减乘除，小数点，共15个）
         单个mod内相同的原始键位将分配相同的新键位"""
@@ -958,11 +926,24 @@ class KeyConfiguratorGUI:
         # 生成主 IOOHmod.ini 配置文件（动态角色列表）
         if self.configurator.generate_main_mod_ini():
             self.log(f"✓ 主UI配置已生成: IOOHmod.ini (角色数:{len(mods)})")
-        
-        # 生成安装说明
-        if self.configurator.generate_d3dx_snippet():
-            self.log("✓ 安装说明已生成: install_notes.txt")
-        
+
+        # 自动生成UI纹理
+        self.log("正在生成UI纹理...")
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            result = subprocess.run(
+                [sys.executable, os.path.join(script_dir, "generate_ui_textures.py")],
+                cwd=script_dir, capture_output=True, text=True, timeout=60
+            )
+            if result.returncode == 0:
+                self.log("✓ UI纹理已自动生成")
+                for line in result.stdout.strip().splitlines():
+                    self.log(f"  {line}")
+            else:
+                self.log(f"✗ UI纹理生成失败: {result.stderr.strip()}")
+        except Exception as e:
+            self.log(f"✗ UI纹理生成异常: {e}")
+
         # 显示完成信息
         self.log("")
         self.log("=" * 60)
@@ -974,7 +955,6 @@ class KeyConfiguratorGUI:
         self.log("5. 游戏内按Enter键切换UI显示/隐藏，↑↓切换角色")
         self.log("6. 无需修改 d3dx.ini")
         self.log("")
-        self.log("提示：运行 python generate_ui_textures.py 生成UI纹理")
         self.log("=" * 60)
     
     
