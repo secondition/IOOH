@@ -70,8 +70,8 @@ void main(vs2ps input, out float4 result : SV_Target0)
     // 如果纹理无效，丢弃像素
     if (!width || !height) discard;
     
-    // 翻转Y坐标（DDS纹理通常是上下颠倒的）
-    input.uv.y = 1 - input.uv.y;
+    // PNG纹理不需要翻转Y坐标（只有DDS需要）
+    // input.uv.y = 1 - input.uv.y;
     
     // 采样纹理
     result = tex.Load(int3(input.uv.xy * float2(width, height), 0));

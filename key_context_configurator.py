@@ -80,14 +80,18 @@ class EFMIKeyConfigurator:
         # 先恢复备份文件，确保从干净状态开始
         self.restore_backups(directory)
         
-        # 获取当前脚本所在目录名，用于跳过自身
-        current_dir_name = os.path.basename(directory)
+        # 获取当前脚本所在目录的绝对路径，用于跳过自身
+        script_dir = os.path.abspath(os.path.dirname(__file__))
         
         for item in os.listdir(directory):
             item_path = os.path.join(directory, item)
             
-            # 跳过隐藏文件夹
+            # 跳过隐藏文件夹、EFMI文件夹和脚本自身所在的文件夹
             if item.startswith('.') or item.startswith('EFMI'):
+                continue
+            
+            # 跳过脚本自身所在的文件夹（IOOH文件夹）
+            if os.path.abspath(item_path) == script_dir:
                 continue
             
             if os.path.isdir(item_path):
