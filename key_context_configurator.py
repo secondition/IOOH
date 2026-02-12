@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""EFMI Key Context Configurator - EFMI按键上下文配置工具 v3.0（重构版）
+"""EFMI Key Context Configurator - EFMI按键上下文配置工具 v4.0（本地变量版）
 
-核心机制：选择器伪共享
-- 所有mod同步计算$selected_character变量
-- 通过↑↓键全局输入实现变量同步
-- 双重condition判断：角色在场 && 选中匹配
+核心机制：本地选择器变量
+- 每个mod声明自己的本地选择器变量 $iooh_s<id>
+- 每个mod拥有自己的 VK_UP/VK_DOWN 处理器，同步循环选择器值
+- Key section 保留 type=cycle，condition 使用本地变量判断
+- 3DMigoto Key condition 只能可靠引用同文件变量，跨文件引用无效
 """
 
 import os
 import re
 import shutil
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, simpledialog
@@ -71,6 +72,53 @@ class EFMIKeyConfigurator:
             print(f"✓ 已恢复 {restored_count} 个备份文件")
         else:
             print("未找到备份文件（首次配置）")
+
+    def backup_mod(self, mod: ModInfo):
+        """为指定 mod 的所有 ini 创建 .backup 副本（幂等）"""
+        for ini_file in mod.ini_files:
+            backup_path = ini_file + '.backup'
+            try:
+                if not os.path.exists(backup_path):
+                    shutil.copy2(ini_file, backup_path)
+            except Exception as e:
+                print(f"备份 {ini_file} 失败: {e}")
+
+    def save_config(self, output_path: str = None) -> bool:
+        """保存扫描结果与按键信息，便于调试/复用"""
+        if output_path is None:
+            output_path = self.config_file
+
+        data = {
+            "mods": [
+                {
+                    "name": mod.name,
+                    "path": mod.path,
+                    "character_id": mod.character_id,
+                    "ini_files": mod.ini_files,
+                    "key_bindings": [
+                        {
+                            "section": kb.section_name,
+                            "key": kb.key,
+                            "original_key": kb.original_key,
+                            "variable": kb.variable,
+                            "description": kb.description,
+                        }
+                        for kb in mod.key_bindings
+                    ],
+                    "has_character_detection": mod.has_character_detection,
+                }
+                for mod in self.mods
+            ]
+        }
+
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"配置已保存到: {output_path}")
+            return True
+        except Exception as e:
+            print(f"保存配置失败: {e}")
+            return False
     
     def scan_mods(self, directory: str) -> List[ModInfo]:
         """扫描目录下的所有mod，检测所有.ini文件和角色hash"""
@@ -222,7 +270,177 @@ class EFMIKeyConfigurator:
             desc_parts.append(f"[{variable}]")
         
         return " ".join(desc_parts) if desc_parts else section_name
+
+    def generate_main_mod_ini(self, output_path: str = None):
+        """生成 IOOH 主UI ini，按扫描结果动态维护角色映射"""
+        if output_path is None:
+            # 默认保存在脚本所在目录，命名为 IOOHmod.ini
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            output_path = os.path.join(script_dir, "IOOHmod.ini")
+        
+        total_chars = len(self.mods)
+        max_id = total_chars - 1 if total_chars > 0 else 0
+        
+        # 生成角色映射注释
+        char_mapping = "; 角色ID映射:\n"
+        for mod in self.mods:
+            char_mapping += f"; {mod.character_id} = {mod.name}\n"
+        
+        # 生成 type=cycle 的值列表
+        # Down: 正向循环 0,1,2,...,N-1
+        # Up:   反向循环 0,N-1,N-2,...,1
+        forward_values = ','.join(str(i) for i in range(total_chars))
+        reverse_values = ','.join(str(i) for i in [0] + list(range(total_chars - 1, 0, -1))) if total_chars > 1 else '0'
+
+        # 主体内容
+        content = f"""; EFMI 主UI管理器 - 自动生成
+; 生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+; 总角色数: {total_chars}
+
+{char_mapping}
+
+[Constants]
+global $show_character_ui = 1
+global $total_characters = {total_chars}
+global $iooh_sel = 0
+
+; 上键: 反向循环
+[KeyEFMI_SelectUp]
+key = VK_UP
+type = cycle
+$iooh_sel = {reverse_values}
+
+; 下键: 正向循环
+[KeyEFMI_SelectDown]
+key = VK_DOWN
+type = cycle
+$iooh_sel = {forward_values}
+
+[KeyEFMI_ToggleUI]
+key = VK_RETURN
+type = cycle
+$show_character_ui = 0,1,
+
+[Present]
+if $show_character_ui == 1
+    run = CustomShaderDrawUI
+endif
+
+[CustomShaderDrawUI]
+vs = shaders\\draw_2d_ui.hlsl
+ps = shaders\\draw_2d_ui.hlsl
+run = BuiltInCommandListUnbindAllRenderTargets
+blend = ADD SRC_ALPHA INV_SRC_ALPHA
+cull = none
+topology = triangle_strip
+o0 = set_viewport bb
+
+; 绘制UI背景
+x87 = 0.25
+y87 = 0.1
+z87 = 0.7
+w87 = 0.05
+ps-t100 = ResourceUIBackground
+Draw = 4,0
+
+; 根据选中的角色绘制对应的角色UI
+"""
+        
+        # 生成每个角色的条件绘制
+        for i, mod in enumerate(self.mods):
+            keyword = "if" if i == 0 else "elif"
+            content += f"""{keyword} $iooh_sel == {mod.character_id}
+    ps-t100 = ResourceCharacter{mod.character_id}Selected
+    Draw = 4,0
+"""
+        if total_chars > 0:
+            content += "endif\n"
+        
+        # 帮助文本
+        content += """
+; 绘制帮助文本
+x87 = 0.18
+y87 = 0.045
+z87 = 0.01
+w87 = 0.82
+ps-t100 = ResourceHelpText1
+Draw = 4,0
+w87 = 0.88
+ps-t100 = ResourceHelpText2
+Draw = 4,0
+w87 = 0.94
+ps-t100 = ResourceHelpText3
+Draw = 4,0
+
+; ===== 资源定义 =====
+[ResourceUIBackground]
+filename = resources\\textures\\ui_background.png
+
+"""
+        
+        # 每个角色的选中态纹理
+        for mod in self.mods:
+            content += f"""[ResourceCharacter{mod.character_id}Selected]
+filename = resources\\textures\\character_{mod.character_id}_selected.png
+
+"""
+        
+        # 帮助文本资源
+        content += """[ResourceHelpText1]
+filename = resources\\textures\\help_↑↓__切换角色.png
+
+[ResourceHelpText2]
+filename = resources\\textures\\help_数字键__控制功能.png
+
+[ResourceHelpText3]
+filename = resources\\textures\\help_Enter__显示_隐藏UI.png
+"""
+        
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"主配置已生成: {output_path}")
+            print(f"  - 角色数量: {total_chars}")
+            print(f"  - 角色ID范围: 0-{max_id}")
+            return True
+        except Exception as e:
+            print(f"生成主配置失败: {e}")
+            return False
     
+    def generate_d3dx_snippet(self, output_path: str = None) -> bool:
+        """生成安装说明文件
+
+        各mod使用本地选择器变量 $iooh_s<id>，
+        不再需要跨文件引用。无需修改 d3dx.ini。
+        """
+        if output_path is None:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            output_path = os.path.join(script_dir, "install_notes.txt")
+        
+        content = f"""===== IOOH 安装说明 =====
+
+每个mod拥有本地选择器变量 $iooh_s<id>，
+各mod自带 VK_UP/VK_DOWN 处理器保持同步。
+无需修改 d3dx.ini。
+
+角色ID映射 (0~{len(self.mods) - 1})：
+"""
+        for mod in self.mods:
+            content += f"  {mod.character_id} = {mod.name}\n"
+        
+        content += f"""\n使用说明：
+  ↑↓ 切换角色 | Enter 显示/隐藏UI | 小键盘 控制功能
+"""
+        
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"安装说明已生成: {output_path}")
+            return True
+        except Exception as e:
+            print(f"生成安装说明失败: {e}")
+            return False
+
     def auto_assign_keys_sequential(self):
         """按检测顺序自动分配小键盘按键（0-9，加减乘除，小数点，共15个）
         单个mod内相同的原始键位将分配相同的新键位"""
@@ -267,139 +485,47 @@ class EFMIKeyConfigurator:
             if len(mod_key_mapping) < len(mod.key_bindings):
                 print(f"{mod.name}: {len(mod.key_bindings)}个按键绑定 -> {len(mod_key_mapping)}个不同键位")
     
-    def backup_mod(self, mod: ModInfo):
-        """备份所有ini文件"""
-        for ini_file in mod.ini_files:
-            if ini_file not in mod.ini_file_backups or not mod.ini_file_backups[ini_file]:
-                backup_path = ini_file + ".backup"
-                if not os.path.exists(backup_path):
-                    try:
-                        shutil.copy2(ini_file, backup_path)
-                        mod.ini_file_backups[ini_file] = True
-                    except Exception as e:
-                        print(f"备份 {os.path.basename(ini_file)} 失败: {e}")
-        mod.has_backup = True
-    
-    def save_config(self, output_path: str = None):
-        """保存配置到JSON文件"""
-        if output_path is None:
-            output_path = self.config_file
-        
-        config = {
-            "version": "3.0",
-            "generated_at": datetime.now().isoformat(),
-            "mods_directory": self.mods_directory,
-            "total_characters": len(self.mods),
-            "mods": []
-        }
-        
-        for mod in self.mods:
-            mod_data = {
-                "name": mod.name,
-                "path": mod.path,
-                "character_id": mod.character_id,
-                "has_character_detection": mod.has_character_detection,
-                "key_bindings": [
-                    {
-                        "section": binding.section_name,
-                        "key": binding.key,
-                        "original_key": binding.original_key,
-                        "variable": binding.variable,
-                        "description": binding.description
-                    }
-                    for binding in mod.key_bindings
-                ]
-            }
-            config["mods"].append(mod_data)
-        
+    def modify_mod_ini(self, mod: ModInfo, create_backup: bool = True) -> bool:
+        """修改所有ini文件，注入本地选择器变量和上下键处理器，添加选择器条件"""
         try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
-            print(f"配置已保存到: {output_path}")
-            return True
-        except Exception as e:
-            print(f"保存配置失败: {e}")
-            return False
-    
-    def insert_selector_control_to_mod(self, mod: ModInfo) -> bool:
-        """为mod的ini文件插入选择器控制代码"""
-        try:
-            # 获取主ini文件（通常是第一个或最大的）
-            main_ini = mod.ini_files[0] if mod.ini_files else None
-            if not main_ini:
-                return False
-            
-            with open(main_ini, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # 检查是否已存在选择器代码（防止重复插入）
-            if '角色选择器控制（由EFMI工具自动生成）' in content:
-                return True  # 已存在，跳过
-            
-            # 生成选择器控制代码
-            selector_code = f"""\n; ===== 角色选择器控制（由EFMI工具自动生成）=====
-[Constants]
-global persist $selected_character = 0  ; 当前选中的角色ID (0-{len(self.mods)-1})
-
-[KeySelectUp]
-key = VK_UP
-type = standard
-run = CommandListSelectUp
-
-[CommandListSelectUp]
-if $selected_character > 0
-    $selected_character = $selected_character - 1
-else
-    $selected_character = {len(self.mods) - 1}
-endif
-
-[KeySelectDown]
-key = VK_DOWN
-type = standard
-run = CommandListSelectDown
-
-[CommandListSelectDown]
-if $selected_character < {len(self.mods) - 1}
-    $selected_character = $selected_character + 1
-else
-    $selected_character = 0
-endif
-; ===== 选择器控制结束 =====\n\n"""
-            
-            # 查找Constants section，在其后插入
-            constants_pattern = r'\[Constants\].*?(?=\n\[|$)'
-            constants_match = re.search(constants_pattern, content, re.DOTALL)
-            
-            if constants_match:
-                # 在Constants section后插入
-                insert_pos = constants_match.end()
-                content = content[:insert_pos] + selector_code + content[insert_pos:]
-            else:
-                # 如果没有Constants，在文件开头插入
-                content = selector_code + content
-            
-            # 写回文件
-            with open(main_ini, 'w', encoding='utf-8') as f:
-                f.write(content)
-            
-            return True
-            
-        except Exception as e:
-            print(f"插入选择器控制到 {mod.name} 失败: {e}")
-            return False
-    
-    def modify_mod_ini(self, mod: ModInfo, key_mapping: Dict[str, str] = None, create_backup: bool = True) -> bool:
-        """修改所有ini文件，添加选择器判断并统一按键"""
-        try:
-            # 备份所有ini文件（仅在需要时）
             if create_backup:
                 self.backup_mod(mod)
-            
+
+            total_chars = len(self.mods)
+            local_var = f'iooh_s{mod.character_id}'
+
+            # 生成上下键 CommandList 循环逻辑
+            cmd_up_lines = []
+            cmd_down_lines = []
+            for i in range(total_chars):
+                keyword = "if" if i == 0 else "elif"
+                next_up = (i - 1) % total_chars
+                next_down = (i + 1) % total_chars
+                cmd_up_lines.append(f'{keyword} ${local_var} == {i}\n    ${local_var} = {next_up}')
+                cmd_down_lines.append(f'{keyword} ${local_var} == {i}\n    ${local_var} = {next_down}')
+            if total_chars > 0:
+                cmd_up_lines.append('endif')
+                cmd_down_lines.append('endif')
+
+            selector_block = f"""; ===== IOOH 本地选择器 =====
+[Key_{local_var}_SelectUp]
+key = VK_UP
+run = CommandList_{local_var}_SelectUp
+
+[CommandList_{local_var}_SelectUp]
+{chr(10).join(cmd_up_lines)}
+
+[Key_{local_var}_SelectDown]
+key = VK_DOWN
+run = CommandList_{local_var}_SelectDown
+
+[CommandList_{local_var}_SelectDown]
+{chr(10).join(cmd_down_lines)}
+; ===== IOOH 本地选择器结束 ====="""
+
             # 按ini文件分组处理按键绑定
             bindings_by_file: Dict[str, List[ModKeyBinding]] = {}
             for binding in mod.key_bindings:
-                # 需要找到这个binding来自哪个ini文件
-                # 通过在每个ini文件中查找section来确定
                 for ini_file in mod.ini_files:
                     try:
                         with open(ini_file, 'r', encoding='utf-8') as f:
@@ -411,94 +537,147 @@ endif
                             break
                     except:
                         continue
-            
+
             # 修改每个ini文件
             for ini_file, bindings in bindings_by_file.items():
                 with open(ini_file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                
-                # 修改该文件中的所有按键绑定
+
+                # 清理旧的IOOH注入内容
+                content = self._strip_local_selector(content)
+
+                # 注入本地选择器变量到 [Constants] section
+                constants_match = re.search(r'(\[Constants\]\s*\n)', content)
+                if constants_match:
+                    insert_pos = constants_match.end()
+                    content = content[:insert_pos] + f'global ${local_var} = 0\n' + content[insert_pos:]
+
+                # 修改每个按键绑定的Key section
                 for binding in bindings:
                     section_pattern = rf'\[{re.escape(binding.section_name)}\](.*?)(?=\n\[|$)'
                     match = re.search(section_pattern, content, re.DOTALL)
-                    
+
                     if match:
                         old_section = match.group(0)
-                        # 获取原始condition（如果有）
-                        original_condition = None
-                        condition_match = re.search(r'condition\s*=\s*(.+)', old_section)
-                        if condition_match:
-                            original_condition = condition_match.group(1).strip()
-                        
                         new_section = self._modify_key_section_with_context(
-                            old_section, 
+                            old_section,
                             mod.character_id,
                             binding.key,
-                            original_condition
+                            local_var,
                         )
                         content = content.replace(old_section, new_section, 1)
-                
-                # 写回文件
+
+                # 在 [Constants] 之后、第一个Key section之前插入选择器块
+                # 找到第一个非Constants的section位置
+                first_key_match = re.search(r'\n(\[Key\w+\])', content)
+                if first_key_match:
+                    insert_pos = first_key_match.start()
+                    content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
+                else:
+                    # 没有Key section，追加到文件末尾
+                    content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
+
                 with open(ini_file, 'w', encoding='utf-8') as f:
                     f.write(content)
-            
+
             return True
-            
+
         except Exception as e:
             print(f"修改 {mod.name} 失败: {e}")
             import traceback
             traceback.print_exc()
             return False
     
-    def _modify_key_section_with_context(self, section_content: str, character_id: int, new_key: str, original_condition: str = None) -> str:
-        """修改单个按键section，添加选择器判断和新按键"""
+    def _modify_key_section_with_context(self, section_content: str, character_id: int, new_key: str, local_var: str) -> str:
+        """修改单个按键section，保留 type=cycle，添加本地选择器变量条件。
+        返回修改后的Key section字符串"""
         lines = section_content.split('\n')
         modified_lines = []
         has_condition = False
-        key_line_index = -1
-        
-        for i, line in enumerate(lines):
+
+        for line in lines:
             stripped = line.strip()
-            
-            # 找到key行
+
             if stripped.startswith('key =') or stripped.startswith('key='):
-                key_line_index = i
-                # 替换为新按键
                 indent = line[:len(line) - len(line.lstrip())]
                 modified_lines.append(f'{indent}key = {new_key}')
-            # 找到condition行
             elif stripped.startswith('condition =') or stripped.startswith('condition='):
                 has_condition = True
-                # 提取现有条件
-                condition_match = re.search(r'condition\s*=\s*(.+)', line)
-                if condition_match:
-                    existing_condition = condition_match.group(1).strip()
-                    # 检查是否已包含选择器判断，避免重复添加
-                    selector_check = f'$selected_character == {character_id}'
-                    if selector_check in existing_condition:
-                        # 已有选择器判断，直接使用原行
-                        modified_lines.append(line)
+                cond_match = re.search(r'condition\s*=\s*(.+)', line)
+                if cond_match:
+                    cond_text = cond_match.group(1).strip()
+                    # 清理旧的 iooh_sel / iooh_s\d+ / *_sel 条件
+                    cond_clean = re.sub(r'\s*&&\s*\$iooh_s\d*\s*==\s*\d+', '', cond_text)
+                    cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+\s*&&\s*', '', cond_clean)
+                    cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+', '', cond_clean)
+                    cond_clean = re.sub(r'\s*&&\s*\$iooh_sel\s*==\s*\d+', '', cond_clean)
+                    cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
+                    cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+', '', cond_clean)
+                    # 清理测试用的 *_sel 变量条件（如 $perlica_sel）
+                    cond_clean = re.sub(r'\s*&&\s*\$\w+_sel\s*==\s*\d+', '', cond_clean)
+                    cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
+                    cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+', '', cond_clean)
+                    cond_clean = cond_clean.strip()
+                    indent = line[:len(line) - len(line.lstrip())]
+                    if cond_clean:
+                        modified_lines.append(f'{indent}condition = {cond_clean} && ${local_var} == {character_id}')
                     else:
-                        # 添加选择器判断
-                        indent = line[:len(line) - len(line.lstrip())]
-                        modified_lines.append(f'{indent}condition = {existing_condition} && {selector_check}')
+                        modified_lines.append(f'{indent}condition = ${local_var} == {character_id}')
                 else:
                     modified_lines.append(line)
             else:
                 modified_lines.append(line)
-        
-        # 如果没有condition，在key行后添加一个
-        if not has_condition and key_line_index >= 0:
-            key_line = modified_lines[key_line_index]
-            indent = key_line[:len(key_line) - len(key_line.lstrip())]
-            # 如果有原始condition（从扫描时保存），使用它
-            if original_condition:
-                modified_lines.insert(key_line_index + 1, f'{indent}condition = {original_condition} && $selected_character == {character_id}')
-            else:
-                # 否则只判断选择器
-                modified_lines.insert(key_line_index + 1, f'{indent}condition = $selected_character == {character_id}')
-        
+
+        # 如果原来没有condition行，在key行后面插入一行
+        if not has_condition:
+            new_lines = []
+            for line in modified_lines:
+                new_lines.append(line)
+                stripped = line.strip()
+                if stripped.startswith('key =') or stripped.startswith('key='):
+                    indent = line[:len(line) - len(line.lstrip())]
+                    new_lines.append(f'{indent}condition = ${local_var} == {character_id}')
+            modified_lines = new_lines
+
         return '\n'.join(modified_lines)
+
+    def _strip_local_selector(self, content: str) -> str:
+        """移除各mod ini中的IOOH注入内容（本地选择器变量、上下键、旧CommandList）"""
+        # 移除 global persist $selected_character 行
+        content = re.sub(r'^.*\$selected_character.*\n', '', content, flags=re.MULTILINE)
+
+        # 移除本地选择器变量声明 global $iooh_s<N> = 0
+        content = re.sub(r'^global \$iooh_s\d+\s*=\s*\d+\s*\n', '', content, flags=re.MULTILINE)
+
+        # 移除旧版 [KeySelectUp]/[KeySelectDown] 及其 CommandList
+        content = re.sub(r'\[KeySelectUp\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[KeySelectDown\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[CommandListSelectUp\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[CommandListSelectDown\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+
+        # 移除新版本地选择器 Key 和 CommandList sections
+        content = re.sub(r'\[Key_iooh_s\d+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[CommandList_iooh_s\d+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+
+        # 移除旧的 IOOH CommandList sections（上次脚本生成的）
+        content = re.sub(r'\[CommandList_IOOH_\w+\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+
+        # 移除标记块
+        content = re.sub(r';\s*=====\s*角色选择器控制.*?;\s*=====\s*选择器控制结束\s*=====?\n?', '', content, flags=re.MULTILINE | re.DOTALL)
+        content = re.sub(r';\s*=====\s*IOOH 角色选择器 CommandList\s*=====\s*\n?', '', content, flags=re.MULTILINE)
+        content = re.sub(r';\s*=====\s*IOOH 本地选择器\s*=====\s*\n?', '', content, flags=re.MULTILINE)
+        content = re.sub(r';\s*=====\s*IOOH 本地选择器结束\s*=====\s*\n?', '', content, flags=re.MULTILINE)
+
+        # 移除测试用的本地选择变量（如 $perlica_sel）和相关sections
+        content = re.sub(r'^;.*测试用.*\n', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^global \$\w+_sel\s*=\s*\d+\s*\n', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[Key_\w+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[CommandList_\w+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+
+        # 清理多余空行（3个以上连续空行压缩为2个）
+        content = re.sub(r'\n{4,}', '\n\n\n', content)
+
+        return content
 
 
 class KeyConfiguratorGUI:
@@ -506,7 +685,6 @@ class KeyConfiguratorGUI:
     
     def __init__(self):
         self.configurator = EFMIKeyConfigurator()
-        self.key_mapping: Dict[str, str] = {}  # variable -> new_key
         
         self.root = tk.Tk()
         self.root.title("EFMI 按键上下文配置器 v1.0")
@@ -615,16 +793,7 @@ class KeyConfiguratorGUI:
         
         # 立即执行备份和修改
         self.log("开始自动备份并修改配置文件...")
-        self.log("步骤1：为每个mod插入选择器控制代码...")
-        selector_count = 0
-        for mod in mods:
-            if self.configurator.insert_selector_control_to_mod(mod):
-                selector_count += 1
-                self.log(f"  ✓ {mod.name} 已插入选择器控制（ID={mod.character_id}）")
-            else:
-                self.log(f"  ✗ {mod.name} 插入选择器失败")
-        
-        self.log(f"步骤2：修改按键绑定为双重condition...")
+        self.log("步骤：注入本地选择器变量 + 上下键处理器 + condition条件")
         success_count = 0
         for mod in mods:
             if self.configurator.modify_mod_ini(mod):
@@ -633,7 +802,7 @@ class KeyConfiguratorGUI:
             else:
                 self.log(f"  ✗ {mod.name} 配置失败")
         
-        self.log(f"自动配置完成: 选择器{selector_count}/{len(mods)}, 按键{success_count}/{len(mods)}")
+        self.log(f"自动配置完成: 按键{success_count}/{len(mods)}")
         self.log('提示：双击"新按键"列可以手动修改，然后点击"保存"按钮更新配置')
         
         # 填充表格
@@ -657,14 +826,24 @@ class KeyConfiguratorGUI:
         if self.configurator.save_config():
             self.log(f"✓ 配置已保存到 {self.configurator.config_file}")
         
+        # 生成主 IOOHmod.ini 配置文件（动态角色列表）
+        if self.configurator.generate_main_mod_ini():
+            self.log(f"✓ 主UI配置已生成: IOOHmod.ini (角色数:{len(mods)})")
+        
+        # 生成安装说明
+        if self.configurator.generate_d3dx_snippet():
+            self.log("✓ 安装说明已生成: install_notes.txt")
+        
         # 显示完成信息
         self.log("")
         self.log("=" * 60)
         self.log("配置完成！使用说明：")
-        self.log(f"1. 每个mod已添加选择器控制（↑↓键切换角色0-{len(mods)-1}）")
-        self.log("2. 小键盘按键只在对应角色ID被选中时生效")
-        self.log("3. 所有mod同步计算$selected_character变量")
-        self.log("4. 游戏内按Enter键切换UI显示/隐藏")
+        self.log(f"1. 每个mod拥有本地选择器变量 $iooh_s<id>")
+        self.log(f"2. 每个mod拥有自己的 VK_UP/VK_DOWN 处理器，保持同步")
+        self.log("3. 各mod的按键 condition 使用本地变量判断 $iooh_s<id> == <角色ID>")
+        self.log("4. 小键盘按键只在对应角色ID被选中时生效")
+        self.log("5. 游戏内按Enter键切换UI显示/隐藏，↑↓切换角色")
+        self.log("6. 无需修改 d3dx.ini")
         self.log("")
         self.log("提示：运行 python generate_ui_textures.py 生成UI纹理")
         self.log("=" * 60)

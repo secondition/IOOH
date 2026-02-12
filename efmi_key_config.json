@@ -1,14 +1,12 @@
 {
-  "version": "3.0",
-  "generated_at": "2026-02-12T12:55:36.781148",
-  "mods_directory": "D:/ikun/Downloads/endfield/mods",
-  "total_characters": 2,
   "mods": [
     {
       "name": "laevatain_mk3l_7fa3f",
       "path": "D:/ikun/Downloads/endfield/mods\\laevatain_mk3l_7fa3f",
       "character_id": 0,
-      "has_character_detection": true,
+      "ini_files": [
+        "D:/ikun/Downloads/endfield/mods\\laevatain_mk3l_7fa3f\\Default.ini"
+      ],
       "key_bindings": [
         {
           "section": "KeySwap_0",
@@ -101,13 +99,16 @@
           "variable": "$active0",
           "description": "Swap_12 (cycle) [$active0]"
         }
-      ]
+      ],
+      "has_character_detection": true
     },
     {
       "name": "佩丽卡",
       "path": "D:/ikun/Downloads/endfield/mods\\佩丽卡",
       "character_id": 1,
-      "has_character_detection": true,
+      "ini_files": [
+        "D:/ikun/Downloads/endfield/mods\\佩丽卡\\mod.ini"
+      ],
       "key_bindings": [
         {
           "section": "Keynipples",
@@ -158,7 +159,8 @@
           "variable": "$baosha",
           "description": "baosha (cycle) [$baosha]"
         }
-      ]
+      ],
+      "has_character_detection": true
     }
   ]
 }
