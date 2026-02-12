@@ -299,23 +299,20 @@ class EFMIKeyConfigurator:
         for mod in self.mods:
             char_mapping += f"; {mod.character_id} = {mod.name}\n"
 
-        # 生成 type=cycle 的值列表
-        forward_values = ','.join(str(i) for i in range(total_chars))
-        reverse_values = ','.join(str(i) for i in [0] + list(range(total_chars - 1, 0, -1))) if total_chars > 1 else '0'
-
-        # === 布局参数 ===
-        left_x = 0.01          # 左侧起始X
-        help_w = 0.18          # 帮助文本宽度
-        help_h = 0.035         # 帮助文本高度
-        char_w = 0.15          # 角色项宽度
-        char_h = 0.038         # 角色项高度
-        gap = 0.005            # 行间距
-        section_gap = 0.012    # 帮助文本与角色列表间距
+        # === 布局参数（基于16:9屏幕等比例缩放） ===
+        aspect = 16 / 9       # 屏幕宽高比
+        left_x = 0.01         # 左侧起始X
+        help_w = 0.28         # 帮助文本宽度
+        help_h = help_w * aspect * (60 / 500)   # 纹理500x60，等比缩放
+        char_w = 0.15         # 角色项宽度
+        char_h = char_w * aspect * (100 / 500)  # 纹理500x100，等比缩放
+        gap = 0.006           # 行间距
+        section_gap = 0.012   # 帮助文本与角色列表间距
         # === 按键图标网格参数 ===
-        icon_w = 0.028         # 图标宽度
-        icon_h = 0.032         # 图标高度
-        icon_gap = 0.003       # 图标间距
-        grid_cols = 5          # 5列
+        icon_w = 0.028        # 图标宽度
+        icon_h = icon_w * aspect * (55 / 70)    # 纹理70x55，等比缩放
+        icon_gap = 0.004      # 图标间距
+        grid_cols = 5         # 5列
         kb_x = left_x + char_w + 0.015  # 按键图标区X起始
 
         # 从底部向上计算起始Y
@@ -337,22 +334,50 @@ global $show_character_ui = 1
 global $total_characters = {total_chars}
 global $iooh_sel = 0
 
-; 上键: 反向循环
+; 上键: 反向循环（$iooh_sel == -1 时不响应）
 [KeyEFMI_SelectUp]
 key = VK_UP
-type = cycle
-$iooh_sel = {reverse_values}
+run = CommandList_SelectUp
 
-; 下键: 正向循环
+[CommandList_SelectUp]
+"""
+        # 生成上键循环逻辑，-1不在条件中所以自动跳过
+        for i in range(total_chars):
+            keyword = "if" if i == 0 else "elif"
+            prev_val = (i - 1) % total_chars
+            content += f"{keyword} $iooh_sel == {i}\n    $iooh_sel = {prev_val}\n"
+        if total_chars > 0:
+            content += "endif\n"
+
+        content += """
+; 下键: 正向循环（$iooh_sel == -1 时不响应）
 [KeyEFMI_SelectDown]
 key = VK_DOWN
-type = cycle
-$iooh_sel = {forward_values}
+run = CommandList_SelectDown
 
+[CommandList_SelectDown]
+"""
+        for i in range(total_chars):
+            keyword = "if" if i == 0 else "elif"
+            next_val = (i + 1) % total_chars
+            content += f"{keyword} $iooh_sel == {i}\n    $iooh_sel = {next_val}\n"
+        if total_chars > 0:
+            content += "endif\n"
+
+        content += """
+; Enter: 切换UI显示，同时切换 $iooh_sel（-1=禁用小键盘）
 [KeyEFMI_ToggleUI]
 key = VK_RETURN
-type = cycle
-$show_character_ui = 0,1,
+run = CommandList_ToggleUI
+
+[CommandList_ToggleUI]
+if $show_character_ui == 1
+    $show_character_ui = 0
+    $iooh_sel = -1
+else
+    $show_character_ui = 1
+    $iooh_sel = 0
+endif
 
 [Present]
 if $show_character_ui == 1
@@ -367,11 +392,12 @@ blend = ADD SRC_ALPHA INV_SRC_ALPHA
 cull = none
 topology = triangle_strip
 o0 = set_viewport bb
-
+"""
+        content += f"""
 ; ===== 帮助文本（左下角顶部） =====
-x87 = {help_w}
-y87 = {help_h}
-z87 = {left_x}
+x87 = {help_w:.4f}
+y87 = {help_h:.4f}
+z87 = {left_x:.4f}
 """
         # 帮助文本3行
         y = start_y
@@ -385,9 +411,9 @@ z87 = {left_x}
         y += section_gap - gap  # 额外间距
         content += f"""
 ; ===== 角色列表（全部显示，选中高亮） =====
-x87 = {char_w}
-y87 = {char_h}
-z87 = {left_x}
+x87 = {char_w:.4f}
+y87 = {char_h:.4f}
+z87 = {left_x:.4f}
 """
         char_start_y = y
         for i, mod in enumerate(self.mods):
@@ -438,7 +464,7 @@ z87 = {left_x}
             if not char_ids:
                 continue  # 没有角色使用这个键，跳过
 
-            content += f"x87 = {icon_w}\ny87 = {icon_h}\n"
+            content += f"x87 = {icon_w:.4f}\ny87 = {icon_h:.4f}\n"
             content += f"z87 = {ix:.4f}\nw87 = {iy:.4f}\n"
 
             if len(char_ids) == total_chars:
@@ -612,6 +638,17 @@ run = CommandList_{local_var}_SelectDown
 
 [CommandList_{local_var}_SelectDown]
 {chr(10).join(cmd_down_lines)}
+
+[Key_{local_var}_ToggleUI]
+key = VK_RETURN
+run = CommandList_{local_var}_ToggleUI
+
+[CommandList_{local_var}_ToggleUI]
+if ${local_var} == -1
+    ${local_var} = 0
+else
+    ${local_var} = -1
+endif
 ; ===== IOOH 本地选择器结束 ====="""
 
             # 按ini文件分组处理按键绑定
@@ -738,8 +775,8 @@ run = CommandList_{local_var}_SelectDown
         # 移除 global persist $selected_character 行
         content = re.sub(r'^.*\$selected_character.*\n', '', content, flags=re.MULTILINE)
 
-        # 移除本地选择器变量声明 global $iooh_s<N> = 0
-        content = re.sub(r'^global \$iooh_s\d+\s*=\s*\d+\s*\n', '', content, flags=re.MULTILINE)
+        # 移除本地选择器变量声明 global $iooh_s<N> = 0 或 -1
+        content = re.sub(r'^global \$iooh_s\d+\s*=\s*-?\d+\s*\n', '', content, flags=re.MULTILINE)
 
         # 移除旧版 [KeySelectUp]/[KeySelectDown] 及其 CommandList
         content = re.sub(r'\[KeySelectUp\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
@@ -747,9 +784,9 @@ run = CommandList_{local_var}_SelectDown
         content = re.sub(r'\[CommandListSelectUp\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
         content = re.sub(r'\[CommandListSelectDown\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
 
-        # 移除新版本地选择器 Key 和 CommandList sections
-        content = re.sub(r'\[Key_iooh_s\d+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
-        content = re.sub(r'\[CommandList_iooh_s\d+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        # 移除新版本地选择器 Key 和 CommandList sections（SelectUp/Down + ToggleUI）
+        content = re.sub(r'\[Key_iooh_s\d+_(?:Select(?:Up|Down)|ToggleUI)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[CommandList_iooh_s\d+_(?:Select(?:Up|Down)|ToggleUI)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
 
         # 移除旧的 IOOH CommandList sections（上次脚本生成的）
         content = re.sub(r'\[CommandList_IOOH_\w+\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
@@ -763,8 +800,8 @@ run = CommandList_{local_var}_SelectDown
         # 移除测试用的本地选择变量（如 $perlica_sel）和相关sections
         content = re.sub(r'^;.*测试用.*\n', '', content, flags=re.MULTILINE)
         content = re.sub(r'^global \$\w+_sel\s*=\s*\d+\s*\n', '', content, flags=re.MULTILINE)
-        content = re.sub(r'\[Key_\w+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
-        content = re.sub(r'\[CommandList_\w+_Select(?:Up|Down)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[Key_\w+_(?:Select(?:Up|Down)|ToggleUI)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        content = re.sub(r'\[CommandList_\w+_(?:Select(?:Up|Down)|ToggleUI)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
 
         # 清理多余空行（3个以上连续空行压缩为2个）
         content = re.sub(r'\n{4,}', '\n\n\n', content)

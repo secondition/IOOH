@@ -147,9 +147,9 @@ class UITextureGenerator:
         print("正在生成帮助文本...")
         
         help_texts = [
-            ("↑↓: 切换角色", 350, 50),
-            ("数字键: 控制功能", 350, 50),
-            ("Enter: 显示/隐藏UI", 380, 50),
+            ("↑↓: 切换角色", 500, 60),
+            ("数字键: 控制功能", 500, 60),
+            ("Enter: 显示/隐藏UI", 500, 60),
         ]
         
         for text, w, h in help_texts:
