@@ -280,25 +280,50 @@ class EFMIKeyConfigurator:
         return " ".join(desc_parts) if desc_parts else section_name
 
     def generate_main_mod_ini(self, output_path: str = None):
-        """生成 IOOH 主UI ini，按扫描结果动态维护角色映射"""
+        """生成 IOOH 主UI ini，按扫描结果动态维护角色映射
+
+        布局：左下角统一面板
+        - 帮助文本（3行）
+        - 角色列表（全部显示，选中高亮）
+        - 选中角色的按键绑定（右侧）
+        """
         if output_path is None:
-            # 默认保存在脚本所在目录，命名为 IOOHmod.ini
             script_dir = os.path.dirname(os.path.abspath(__file__))
             output_path = os.path.join(script_dir, "IOOHmod.ini")
-        
+
         total_chars = len(self.mods)
         max_id = total_chars - 1 if total_chars > 0 else 0
-        
+
         # 生成角色映射注释
         char_mapping = "; 角色ID映射:\n"
         for mod in self.mods:
             char_mapping += f"; {mod.character_id} = {mod.name}\n"
-        
+
         # 生成 type=cycle 的值列表
-        # Down: 正向循环 0,1,2,...,N-1
-        # Up:   反向循环 0,N-1,N-2,...,1
         forward_values = ','.join(str(i) for i in range(total_chars))
         reverse_values = ','.join(str(i) for i in [0] + list(range(total_chars - 1, 0, -1))) if total_chars > 1 else '0'
+
+        # === 布局参数 ===
+        left_x = 0.01          # 左侧起始X
+        help_w = 0.18          # 帮助文本宽度
+        help_h = 0.035         # 帮助文本高度
+        char_w = 0.15          # 角色项宽度
+        char_h = 0.038         # 角色项高度
+        gap = 0.005            # 行间距
+        section_gap = 0.012    # 帮助文本与角色列表间距
+        # === 按键图标网格参数 ===
+        icon_w = 0.028         # 图标宽度
+        icon_h = 0.032         # 图标高度
+        icon_gap = 0.003       # 图标间距
+        grid_cols = 5          # 5列
+        kb_x = left_x + char_w + 0.015  # 按键图标区X起始
+
+        # 从底部向上计算起始Y
+        bottom_margin = 0.02
+        total_height = (3 * help_h + 2 * gap +
+                        section_gap +
+                        total_chars * char_h + max(0, total_chars - 1) * gap)
+        start_y = 1.0 - bottom_margin - total_height
 
         # 主体内容
         content = f"""; EFMI 主UI管理器 - 自动生成
@@ -343,56 +368,114 @@ cull = none
 topology = triangle_strip
 o0 = set_viewport bb
 
-; 绘制UI背景
-x87 = 0.25
-y87 = 0.1
-z87 = 0.7
-w87 = 0.05
-ps-t100 = ResourceUIBackground
-Draw = 4,0
-
-; 根据选中的角色绘制对应的角色UI
+; ===== 帮助文本（左下角顶部） =====
+x87 = {help_w}
+y87 = {help_h}
+z87 = {left_x}
 """
-        
-        # 生成每个角色的条件绘制
+        # 帮助文本3行
+        y = start_y
+        for i in range(1, 4):
+            content += f"w87 = {y:.4f}\n"
+            content += f"ps-t100 = ResourceHelpText{i}\n"
+            content += "Draw = 4,0\n"
+            y += help_h + gap
+
+        # 角色列表
+        y += section_gap - gap  # 额外间距
+        content += f"""
+; ===== 角色列表（全部显示，选中高亮） =====
+x87 = {char_w}
+y87 = {char_h}
+z87 = {left_x}
+"""
+        char_start_y = y
         for i, mod in enumerate(self.mods):
-            keyword = "if" if i == 0 else "elif"
-            content += f"""{keyword} $iooh_sel == {mod.character_id}
-    ps-t100 = ResourceCharacter{mod.character_id}Selected
-    Draw = 4,0
-"""
-        if total_chars > 0:
-            content += "endif\n"
-        
-        # 帮助文本
-        content += """
-; 绘制帮助文本
-x87 = 0.18
-y87 = 0.045
-z87 = 0.01
-w87 = 0.82
-ps-t100 = ResourceHelpText1
-Draw = 4,0
-w87 = 0.88
-ps-t100 = ResourceHelpText2
-Draw = 4,0
-w87 = 0.94
-ps-t100 = ResourceHelpText3
-Draw = 4,0
+            content += f"w87 = {y:.4f}\n"
+            content += f"if $iooh_sel == {mod.character_id}\n"
+            content += f"    ps-t100 = ResourceCharacter{mod.character_id}Selected\n"
+            content += f"else\n"
+            content += f"    ps-t100 = ResourceCharacter{mod.character_id}Normal\n"
+            content += f"endif\n"
+            content += "Draw = 4,0\n"
+            y += char_h + gap
 
+        # === 按键图标网格（角色列表右侧） ===
+        # 15个小键盘按键: (VK名, 资源后缀, 文件名后缀)
+        numpad_keys = [
+            ("VK_NUMPAD0", "Num0", "num0"), ("VK_NUMPAD1", "Num1", "num1"),
+            ("VK_NUMPAD2", "Num2", "num2"), ("VK_NUMPAD3", "Num3", "num3"),
+            ("VK_NUMPAD4", "Num4", "num4"), ("VK_NUMPAD5", "Num5", "num5"),
+            ("VK_NUMPAD6", "Num6", "num6"), ("VK_NUMPAD7", "Num7", "num7"),
+            ("VK_NUMPAD8", "Num8", "num8"), ("VK_NUMPAD9", "Num9", "num9"),
+            ("VK_ADD", "Add", "add"), ("VK_SUBTRACT", "Subtract", "subtract"),
+            ("VK_MULTIPLY", "Multiply", "multiply"), ("VK_DIVIDE", "Divide", "divide"),
+            ("VK_DECIMAL", "Decimal", "decimal"),
+        ]
+
+        # 构建每个VK键被哪些角色使用的映射
+        key_to_chars = {}
+        for mod in self.mods:
+            used_keys = set()
+            for binding in mod.key_bindings:
+                used_keys.add(binding.key)
+            for vk in used_keys:
+                if vk not in key_to_chars:
+                    key_to_chars[vk] = []
+                key_to_chars[vk].append(mod.character_id)
+
+        content += f"""
+; ===== 按键图标网格（角色列表右侧，5列x3行） =====
+; 仅绘制选中角色实际使用的按键图标
+"""
+        for idx, (vk_name, res_suffix, _) in enumerate(numpad_keys):
+            col = idx % grid_cols
+            row = idx // grid_cols
+            ix = kb_x + col * (icon_w + icon_gap)
+            iy = char_start_y + row * (icon_h + icon_gap)
+
+            char_ids = key_to_chars.get(vk_name, [])
+            if not char_ids:
+                continue  # 没有角色使用这个键，跳过
+
+            content += f"x87 = {icon_w}\ny87 = {icon_h}\n"
+            content += f"z87 = {ix:.4f}\nw87 = {iy:.4f}\n"
+
+            if len(char_ids) == total_chars:
+                # 所有角色都用这个键，无条件绘制
+                content += f"ps-t100 = ResourceKey{res_suffix}\nDraw = 4,0\n"
+            else:
+                for j, cid in enumerate(char_ids):
+                    keyword = "if" if j == 0 else "elif"
+                    content += f"{keyword} $iooh_sel == {cid}\n"
+                    content += f"    ps-t100 = ResourceKey{res_suffix}\n"
+                    content += f"    Draw = 4,0\n"
+                content += "endif\n"
+
+        # ===== 资源定义 =====
+        content += """
 ; ===== 资源定义 =====
 [ResourceUIBackground]
 filename = resources\\textures\\ui_background.png
 
 """
-        
-        # 每个角色的选中态纹理
+        # 角色纹理（normal + selected）
         for mod in self.mods:
-            content += f"""[ResourceCharacter{mod.character_id}Selected]
+            content += f"""[ResourceCharacter{mod.character_id}Normal]
+filename = resources\\textures\\character_{mod.character_id}_normal.png
+
+[ResourceCharacter{mod.character_id}Selected]
 filename = resources\\textures\\character_{mod.character_id}_selected.png
 
 """
-        
+
+        # 按键图标纹理（15个固定图标）
+        for vk_name, res_suffix, file_suffix in numpad_keys:
+            content += f"""[ResourceKey{res_suffix}]
+filename = resources\\textures\\key_{file_suffix}.png
+
+"""
+
         # 帮助文本资源
         content += """[ResourceHelpText1]
 filename = resources\\textures\\help_↑↓__切换角色.png
@@ -403,7 +486,7 @@ filename = resources\\textures\\help_数字键__控制功能.png
 [ResourceHelpText3]
 filename = resources\\textures\\help_Enter__显示_隐藏UI.png
 """
-        
+
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(content)
