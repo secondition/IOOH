@@ -1,6 +1,12 @@
-# IOOH — In-game Overlay & Organizer Helper
+# IOOH — I'm out of hotkeys
 
-IOOH 是一个 3DMigoto mod 管理工具，用于解决多角色 mod 之间的按键冲突问题。它能自动扫描 mod 目录、重新分配小键盘按键，并生成游戏内 UI 覆盖层，让你在游戏中直观地切换角色和控制 mod 功能。
+IOOH 是一个 3DMigoto mod 的小工具，用于解决多角色 mod 之间的按键冲突问题。它能自动扫描 mod 目录、重新分配小键盘按键，并生成游戏内 UI 覆盖层，让你在游戏中直观地切换角色和控制 mod 功能。
+
+ui相当简陋，因为我要拉电线去了。
+
+ps：只测试了终末地模组，并且只对绑定了 `type=cycle` 的按键进行重分配，其他类型的按键（如 `type=hold`）暂不支持。
+
+
 
 ## 功能
 
