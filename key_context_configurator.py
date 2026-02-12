@@ -50,10 +50,35 @@ class EFMIKeyConfigurator:
         self.mods_directory = ""
         self.config_file = "efmi_key_config.json"
         
+    def restore_backups(self, directory: str):
+        """恢复所有备份文件，确保从干净状态开始"""
+        print("恢复备份文件...")
+        restored_count = 0
+        
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if file.endswith('.backup'):
+                    backup_path = os.path.join(root, file)
+                    original_path = backup_path[:-7]  # 去掉 .backup
+                    
+                    try:
+                        shutil.copy2(backup_path, original_path)
+                        restored_count += 1
+                    except Exception as e:
+                        print(f"恢复 {file} 失败: {e}")
+        
+        if restored_count > 0:
+            print(f"✓ 已恢复 {restored_count} 个备份文件")
+        else:
+            print("未找到备份文件（首次配置）")
+    
     def scan_mods(self, directory: str) -> List[ModInfo]:
         """扫描目录下的所有mod，检测所有.ini文件和角色hash"""
         self.mods_directory = directory
         self.mods.clear()
+        
+        # 先恢复备份文件，确保从干净状态开始
+        self.restore_backups(directory)
         
         # 获取当前脚本所在目录名，用于跳过自身
         current_dir_name = os.path.basename(directory)
@@ -303,6 +328,10 @@ class EFMIKeyConfigurator:
             with open(main_ini, 'r', encoding='utf-8') as f:
                 content = f.read()
             
+            # 检查是否已存在选择器代码（防止重复插入）
+            if '角色选择器控制（由EFMI工具自动生成）' in content:
+                return True  # 已存在，跳过
+            
             # 生成选择器控制代码
             selector_code = f"""\n; ===== 角色选择器控制（由EFMI工具自动生成）=====
 [Constants]
@@ -440,9 +469,15 @@ endif
                 condition_match = re.search(r'condition\s*=\s*(.+)', line)
                 if condition_match:
                     existing_condition = condition_match.group(1).strip()
-                    # 添加选择器判断
-                    indent = line[:len(line) - len(line.lstrip())]
-                    modified_lines.append(f'{indent}condition = {existing_condition} && $selected_character == {character_id}')
+                    # 检查是否已包含选择器判断，避免重复添加
+                    selector_check = f'$selected_character == {character_id}'
+                    if selector_check in existing_condition:
+                        # 已有选择器判断，直接使用原行
+                        modified_lines.append(line)
+                    else:
+                        # 添加选择器判断
+                        indent = line[:len(line) - len(line.lstrip())]
+                        modified_lines.append(f'{indent}condition = {existing_condition} && {selector_check}')
                 else:
                     modified_lines.append(line)
             else:
@@ -618,24 +653,6 @@ class KeyConfiguratorGUI:
         if self.configurator.save_config():
             self.log(f"✓ 配置已保存到 {self.configurator.config_file}")
         
-        # 生成角色显示配置（游戏内UI）
-        self.log("")
-        self.log("步骤3：生成游戏内显示配置...")
-        try:
-            from generate_character_display import CharacterDisplayGenerator
-            display_gen = CharacterDisplayGenerator()
-            if display_gen.generate_display_config():
-                self.log("✓ 已生成角色显示配置 (character_display.json)")
-                if display_gen.update_main_ini():
-                    self.log("✓ 已添加游戏内文本显示功能到 mod.ini")
-                else:
-                    self.log("⚠ 更新显示代码失败，请手动运行 generate_character_display.py")
-            else:
-                self.log("⚠ 生成显示配置失败")
-        except Exception as e:
-            self.log(f"⚠ 无法生成显示配置: {e}")
-            self.log("提示：可手动运行 generate_character_display.py 生成")
-        
         # 显示完成信息
         self.log("")
         self.log("=" * 60)
@@ -644,9 +661,8 @@ class KeyConfiguratorGUI:
         self.log("2. 小键盘按键只在对应角色ID被选中时生效")
         self.log("3. 所有mod同步计算$selected_character变量")
         self.log("4. 游戏内按Enter键切换UI显示/隐藏")
-        self.log("5. 编辑 character_name_mapping.json 可自定义角色名称")
         self.log("")
-        self.log("提示：运行 python generate_character_display.py 可单独更新UI")
+        self.log("提示：运行 python generate_ui_textures.py 生成UI纹理")
         self.log("=" * 60)
     
     

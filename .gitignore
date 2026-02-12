@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated files
+*.log
+efmi_key_config.json
+
+# Generated UI textures
+resources/
+
+# Reference projects
+snaccubus-endminfmegamenumod-publicv6_update2/

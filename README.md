@@ -1,150 +1,40 @@
-# EFMI Key Context Manager v3.0
+# EFMI Key Context Manager
 
-基于选择器的3DMigoto按键统一管理工具
+基于图像GUI的3DMigoto mod按键管理系统
 
-## 🎯 核心机制
+## 使用步骤
 
-**选择器伪共享**：虽然3DMigoto变量无法跨mod传输，但**按键输入是全局的**！
-
-```
-用户按↓键 → 所有mod响应 → 各自计算 $selected_character++
-结果：所有mod的变量值保持一致！
-```
-
-**双重判断**：
-```ini
-condition = $active0 == 1 && $selected_character == 0
-            └─角色在场─┘    └─当前选中此角色─┘
-```
-
-## 📦 项目文件
-
-```
-IOOH/
-├── key_context_configurator.py     ✓ 主程序（GUI配置工具）
-├── generate_character_display.py   ✓ 显示配置生成器
-├── mod.ini                         ✓ 主控mod模板（含UI显示）
-├── character_name_mapping.json     ✓ 角色名称映射字典
-├── efmi_key_config.json            ✓ mod配置文件（自动生成）
-├── character_display.json          ✓ 显示配置文件（自动生成）
-├── README.md                       ✓ 本文件
-└── REFACTOR_NOTES.md               ✓ 重构说明
-```
-
-## 🚀 使用流程
-
-### 步骤1: 运行配置工具
-
+### 1. 生成UI纹理
 ```bash
-python key_context_configurator.py
+python generate_ui_textures.py
 ```
 
-1. 输入mods目录路径（或点击"浏览"按钮）
-2. 点击"扫描并自动配置"
-3. 等待完成（查看日志）
-
-### 步骤2: 脚本自动完成
-
-- ✅ 检测所有type=cycle的按键
-- ✅ 为每个mod插入选择器控制代码
-- ✅ 修改按键condition为双重判断
-- ✅ 统一按键映射到小键盘0-9等
-- ✅ 自动备份原始文件（.backup）
-- ✅ 生成角色名称映射（可自定义显示名称）
-- ✅ 添加游戏内文本显示功能
-
-### 步骤3: 游戏内使用
-
-- **Enter键**：切换UI显示/隐藏（默认隐藏）
-- **↑键**：选择上一个角色（ID-1）
-- **↓键**：选择下一个角色（ID+1）
-- **屏幕显示**：按Enter后显示当前选中的角色名称
-- **小键盘0-9, +, -, *, /, .**：控制当前选中的角色
-
-## 🎨 自定义角色名称
-
-编辑 [character_name_mapping.json](character_name_mapping.json) 可自定义显示名称：
-
-```json
-{
-  "match_rules": [
-    {
-      "keywords": ["laevatain", "莱万汀"],
-      "display_name": "莱万汀"
-    },
-    {
-      "keywords": ["perlica", "佩丽卡"],
-      "display_name": "佩丽卡"
-    }
-  ]
-}
+### 2. 安装
+将整个文件夹复制到游戏Mods目录：
+```
+[游戏目录]/Mods/EFMI_KeyManager/
 ```
 
-**匹配规则**：
-- 不区分大小写，包含任一关键词即匹配
-- 未匹配的mod将显示原始名称
-- 修改后运行 `python generate_character_display.py` 更新
+## 游戏内操作
 
-## � 按键分配
+- **↑/↓** - 切换角色
+- **Enter** - 显示/隐藏UI
+- **数字键** - 控制当前角色功能
 
-每个角色可用15个按键：
-- **0-9** : VK_NUMPAD0 ~ VK_NUMPAD9
-- **+** : VK_ADD
-- **-** : VK_SUBTRACT
-- ***** : VK_MULTIPLY
-- **/** : VK_DIVIDE  
-- **.** : VK_DECIMAL
+## 核心文件
 
-## ⚙️ 高级说明
+- `mod.ini` - mod配置
+- `generate_ui_textures.py` - 生成UI纹理
+- `key_context_configurator.py` - 配置按键绑定
+- `shaders/draw_2d_ui.hlsl` - UI绘制着色器
+- `character_name_mapping.json` - 角色名称配置
 
-查看 [REFACTOR_NOTES.md](REFACTOR_NOTES.md) 了解：
-- 技术实现细节
-- 为何采用选择器机制
-- v2.0→v3.0的重构原因
+## 技术实现
 
-## 🛠 开发者信息
+由于3DMigoto不支持文本渲染，使用Python生成带文本的PNG图像，通过HLSL着色器绘制2D四边形显示UI。
 
-- **Python版本**: 3.7+
-- **依赖**: tkinter (标准库)
-- **目标**: 3DMigoto框架的ini文件
+参考：Snaccubus的EndminF MegaMenu Mod
 
-简洁、高效、统一 🎮
+## 许可证
 
-## 💡 工作示例
-
-假设有2个角色mod，你为他们分配了ID：
-- 角色A（character_id=0）
-- 角色B（character_id=1）
-
-游戏内操作：
-```
-1. 按Enter → 打开UI显示
-2. 按↓键 → 所有mod计算: $selected_character = 1
-3. 屏幕显示: "当前选中: 角色B (ID 1)"
-4. 角色B检测: 在场($active1==1) && 被选中($selected_character==1) → ✓
-5. 按小键盘0 → 只有角色B响应，角色A不响应
-6. 按↑键 → 所有mod计算: $selected_character = 0
-7. 屏幕显示: "当前选中: 角色A (ID 0)"
-8. 角色A检测: 在场($active0==1) && 被选中($selected_character==0) → ✓
-9. 按小键盘0 → 只有角色A响应，角色B不响应
-10. 按Enter → 隐藏UI显示
-```
-
-## 🐛 故障排查
-
-**如果按键不生效**：
-
-**如果按键不生效**：
-1. 检查mod的ini文件中是否包含选择器控制代码（[KeySelectUp]/[KeySelectDown]）
-2. 确认按键的condition是否为双重判断格式
-3. 查看备份文件（.backup）对比修改前后的区别
-
-**如果扫描不到mod**：
-- 确保mod目录中有ini文件（mod.ini、default.ini等）
-- 确保ini文件中有`type=cycle`的section
-- 查看日志输出了解具体原因
-
----
-
-**版本**: v3.0  
-**更新日期**: 2026-02-11
+MIT License
