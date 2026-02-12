@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import json
+import stat
 from typing import Dict, List
 from datetime import datetime
 import tkinter as tk
@@ -50,6 +51,12 @@ class EFMIKeyConfigurator:
         self.mods: List[ModInfo] = []
         self.mods_directory = ""
         self.config_file = "efmi_key_config.json"
+
+    @staticmethod
+    def _ensure_writable(filepath: str):
+        """移除文件只读属性（如有）"""
+        if os.path.exists(filepath) and not os.access(filepath, os.W_OK):
+            os.chmod(filepath, stat.S_IWRITE | stat.S_IREAD)
         
     def restore_backups(self, directory: str):
         """恢复所有备份文件，确保从干净状态开始"""
@@ -63,6 +70,7 @@ class EFMIKeyConfigurator:
                     original_path = backup_path[:-7]  # 去掉 .backup
                     
                     try:
+                        self._ensure_writable(original_path)
                         shutil.copy2(backup_path, original_path)
                         restored_count += 1
                     except Exception as e:
@@ -577,6 +585,7 @@ run = CommandList_{local_var}_SelectDown
                     # 没有Key section，追加到文件末尾
                     content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
 
+                self._ensure_writable(ini_file)
                 with open(ini_file, 'w', encoding='utf-8') as f:
                     f.write(content)
 
