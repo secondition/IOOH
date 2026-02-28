@@ -5,7 +5,7 @@
 核心机制：本地选择器变量
 - 每个mod声明自己的本地选择器变量 $iooh_s<id>
 - 每个mod拥有自己的 VK_UP/VK_DOWN 处理器，同步循环选择器值
-- Key section 保留 type=cycle，condition 使用本地变量判断
+- Key section 保留原有type，condition 使用本地变量判断
 - 3DMigoto Key condition 只能可靠引用同文件变量，跨文件引用无效
 """
 
@@ -153,12 +153,13 @@ class EFMIKeyConfigurator:
                 continue
             
             if os.path.isdir(item_path):
-                # 查找该文件夹下所有.ini文件
+                # 递归查找该文件夹下所有.ini文件（包括子文件夹）
                 ini_files = []
                 try:
-                    for file in os.listdir(item_path):
-                        if file.lower().endswith('.ini'):
-                            ini_files.append(os.path.join(item_path, file))
+                    for root, _, files in os.walk(item_path):
+                        for file in files:
+                            if file.lower().endswith('.ini'):
+                                ini_files.append(os.path.join(root, file))
                 except PermissionError:
                     continue
                 
@@ -171,7 +172,7 @@ class EFMIKeyConfigurator:
                         if self._check_has_character_detection(ini_file):
                             mod.has_character_detection = True
                     
-                    # 只添加有type=cycle按键绑定的mod（模型切换功能）
+                    # 只添加有按键绑定的mod
                     if mod.key_bindings:
                         self.mods.append(mod)
         
@@ -237,12 +238,10 @@ class EFMIKeyConfigurator:
                 variable = self._extract_variable_from_section(section_content)
                 binding_type = self._extract_type_from_section(section_content)
                 
-                # 只处理 type = cycle 的按键（模型切换功能）
-                if binding_type and binding_type.lower() == 'cycle':
-                    binding = ModKeyBinding(section_name, key, variable or f"${section_name}", mod.path)
-                    # 使用section名称作为描述，保持原样
-                    binding.description = self._generate_description(section_name, variable, binding_type)
-                    mod.key_bindings.append(binding)
+                # 处理所有包含 key = 的热键绑定
+                binding = ModKeyBinding(section_name, key, variable or f"${section_name}", mod.path)
+                binding.description = self._generate_description(section_name, variable, binding_type)
+                mod.key_bindings.append(binding)
                     
         except Exception as e:
             ini_filename = os.path.basename(ini_file_path)
@@ -686,7 +685,7 @@ endif
             return False
     
     def _modify_key_section_with_context(self, section_content: str, character_id: int, new_key: str, local_var: str) -> str:
-        """修改单个按键section，保留 type=cycle，添加本地选择器变量条件。
+        """修改单个按键section，保留原有type，添加本地选择器变量条件。
         返回修改后的Key section字符串"""
         lines = section_content.split('\n')
         modified_lines = []
@@ -861,9 +860,9 @@ class KeyConfiguratorGUI:
             return
         
         self.log(f"开始扫描目录: {directory}")
-        self.log("只检测包含 type=cycle 的按键（模型切换功能）...")
+        self.log("检测所有热键绑定...")
         mods = self.configurator.scan_mods(directory)
-        self.log(f"扫描完成，发现 {len(mods)} 个支持模型切换的mod")
+        self.log(f"扫描完成，发现 {len(mods)} 个包含热键绑定的mod")
         
         # 显示检测到的ini文件详情
         for mod in mods:
@@ -871,17 +870,17 @@ class KeyConfiguratorGUI:
             key_count = len(mod.key_bindings)
             detection_info = "有检测" if mod.has_character_detection else "无检测"
             if key_count > 15:
-                self.log(f"  ⚠ {mod.name}: {', '.join(ini_names)} ({key_count}个cycle按键，超过15个) [{detection_info}]")
+                self.log(f"  ⚠ {mod.name}: {', '.join(ini_names)} ({key_count}个按键绑定，超过15个) [{detection_info}]")
             else:
-                self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个cycle按键) [{detection_info}]")
+                self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个按键绑定) [{detection_info}]")
         
         # 清空表格
         for item in self.tree.get_children():
             self.tree.delete(item)
         
         if not mods:
-            self.log("未检测到支持模型切换的mod（需要有 type=cycle 的按键）")
-            messagebox.showwarning("提示", "未检测到支持模型切换的mod\n\n请确保mod文件夹中包含 type=cycle 的按键配置")
+            self.log("未检测到包含热键绑定的mod")
+            messagebox.showwarning("提示", "未检测到包含热键绑定的mod\n\n请确保mod文件夹中包含 key = 的按键配置")
             return
         
         # 自动按顺序分配按键
@@ -917,7 +916,7 @@ class KeyConfiguratorGUI:
         
         total_bindings = sum(len(m.key_bindings) for m in mods)
         total_ini_files = sum(len(m.ini_files) for m in mods)
-        self.log(f"表格更新完成，共扫描 {total_ini_files} 个ini文件，{total_bindings} 个cycle按键绑定")
+        self.log(f"表格更新完成，共扫描 {total_ini_files} 个ini文件，{total_bindings} 个按键绑定")
         
         # 保存配置文件
         if self.configurator.save_config():
