@@ -12,25 +12,7 @@ import json
 from typing import List, Tuple
 
 
-VK_DISPLAY_NAMES = {
-    "VK_NUMPAD0": "Num0", "VK_NUMPAD1": "Num1", "VK_NUMPAD2": "Num2",
-    "VK_NUMPAD3": "Num3", "VK_NUMPAD4": "Num4", "VK_NUMPAD5": "Num5",
-    "VK_NUMPAD6": "Num6", "VK_NUMPAD7": "Num7", "VK_NUMPAD8": "Num8",
-    "VK_NUMPAD9": "Num9", "VK_ADD": "Num+", "VK_SUBTRACT": "Num-",
-    "VK_MULTIPLY": "Num*", "VK_DIVIDE": "Num/", "VK_DECIMAL": "Num.",
-}
-
-# 15个小键盘按键: (VK名, 显示符号, 文件名后缀)
-NUMPAD_KEYS_INFO = [
-    ("VK_NUMPAD0", "0", "num0"), ("VK_NUMPAD1", "1", "num1"),
-    ("VK_NUMPAD2", "2", "num2"), ("VK_NUMPAD3", "3", "num3"),
-    ("VK_NUMPAD4", "4", "num4"), ("VK_NUMPAD5", "5", "num5"),
-    ("VK_NUMPAD6", "6", "num6"), ("VK_NUMPAD7", "7", "num7"),
-    ("VK_NUMPAD8", "8", "num8"), ("VK_NUMPAD9", "9", "num9"),
-    ("VK_ADD", "+", "add"), ("VK_SUBTRACT", "-", "subtract"),
-    ("VK_MULTIPLY", "*", "multiply"), ("VK_DIVIDE", "/", "divide"),
-    ("VK_DECIMAL", ".", "decimal"),
-]
+from PIL import Image, ImageDraw, ImageFont
 
 
 class UITextureGenerator:
@@ -145,10 +127,9 @@ class UITextureGenerator:
     def create_help_text(self):
         """创建帮助文本图像"""
         print("正在生成帮助文本...")
-        
+
         help_texts = [
             ("↑↓: 切换角色", 500, 60),
-            ("数字键: 控制功能", 500, 60),
             ("Enter: 显示/隐藏UI", 500, 60),
         ]
         
@@ -184,35 +165,6 @@ class UITextureGenerator:
         self.save_image(small_img, "ui_background.png")
         print("  生成: ui_background.png")
         
-    def create_key_icon_textures(self):
-        """生成15个固定的小键盘按键图标纹理
-
-        每个图标是一个小方块，显示按键符号（0-9, +, -, *, /, .）
-        在INI中根据角色实际使用的键位条件绘制这些图标。
-        """
-        print("正在生成按键图标纹理...")
-
-        font = self.get_font(28)
-        icon_w, icon_h = 70, 55
-        bg = (25, 30, 45, 220)
-        border = (80, 140, 200, 255)
-        text_fill = (220, 230, 255, 255)
-
-        for vk_name, symbol, suffix in NUMPAD_KEYS_INFO:
-            img = Image.new('RGBA', (icon_w, icon_h), bg)
-            draw = ImageDraw.Draw(img)
-            draw.rectangle([0, 0, icon_w - 1, icon_h - 1],
-                           outline=border, width=2)
-            # 居中绘制符号
-            bbox = draw.textbbox((0, 0), symbol, font=font)
-            tx = (icon_w - (bbox[2] - bbox[0])) // 2
-            ty = (icon_h - (bbox[3] - bbox[1])) // 2
-            draw.text((tx, ty), symbol, font=font, fill=text_fill)
-
-            filename = f"key_{suffix}.png"
-            self.save_image(img, filename)
-            print(f"  生成: {filename}")
-
     def save_image(self, img: Image.Image, filename: str):
         """保存图像为PNG格式
         
@@ -236,7 +188,6 @@ class UITextureGenerator:
         self.create_character_selector_ui(character_names)
         self.create_help_text()
         self.create_background_panel()
-        self.create_key_icon_textures()
 
         print("=" * 60)
         print(f"UI纹理生成完成！输出目录: {self.output_dir}")
