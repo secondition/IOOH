@@ -12,9 +12,6 @@ import json
 from typing import List, Tuple
 
 
-from PIL import Image, ImageDraw, ImageFont
-
-
 class UITextureGenerator:
     """UI纹理生成器"""
 
