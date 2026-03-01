@@ -21,6 +21,8 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 
+import generate_ui_textures
+
 
 class ModKeyBinding:
     """mod按键绑定信息"""
@@ -361,9 +363,9 @@ run = CommandList_SelectDown
             content += "endif\n"
 
         content += """
-; Enter: 切换UI显示，同时切换 $iooh_sel（-1=禁用选择器）
+; \ : 切换UI显示，同时切换 $iooh_sel（-1=禁用选择器）
 [KeyEFMI_ToggleUI]
-key = VK_RETURN
+key = VK_OEM_5
 run = CommandList_ToggleUI
 
 [CommandList_ToggleUI]
@@ -473,7 +475,7 @@ run = CommandList_{local_var}_SelectDown
 {chr(10).join(cmd_down_lines)}
 
 [Key_{local_var}_ToggleUI]
-key = VK_RETURN
+key = VK_OEM_5
 run = CommandList_{local_var}_ToggleUI
 
 [CommandList_{local_var}_ToggleUI]
