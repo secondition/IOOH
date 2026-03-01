@@ -4,7 +4,7 @@
 
 核心机制：本地选择器变量
 - 每个mod声明自己的本地选择器变量 $iooh_s<id>
-- 每个mod拥有自己的 VK_UP/VK_DOWN 处理器，同步循环选择器值
+- 每个mod拥有自己的 VK_PRIOR/VK_NEXT 处理器，同步循环选择器值
 - Key section 保留原有type，condition 使用本地变量判断
 - 3DMigoto Key condition 只能可靠引用同文件变量，跨文件引用无效
 """
@@ -320,9 +320,9 @@ global $show_character_ui = 1
 global $total_characters = {total_chars}
 global $iooh_sel = 0
 
-; 上键: 反向循环（$iooh_sel == -1 时不响应）
+; PageUp: 反向循环（$iooh_sel == -1 时不响应）
 [KeyEFMI_SelectUp]
-key = VK_UP
+key = VK_PRIOR
 run = CommandList_SelectUp
 
 [CommandList_SelectUp]
@@ -336,9 +336,9 @@ run = CommandList_SelectUp
             content += "endif\n"
 
         content += """
-; 下键: 正向循环（$iooh_sel == -1 时不响应）
+; PageDown: 正向循环（$iooh_sel == -1 时不响应）
 [KeyEFMI_SelectDown]
-key = VK_DOWN
+key = VK_NEXT
 run = CommandList_SelectDown
 
 [CommandList_SelectDown]
@@ -449,14 +449,14 @@ filename = resources\\textures\\character_{mod.character_id}_selected.png
 
             selector_block = f"""; ===== IOOH 本地选择器 =====
 [Key_{local_var}_SelectUp]
-key = VK_UP
+key = VK_PRIOR
 run = CommandList_{local_var}_SelectUp
 
 [CommandList_{local_var}_SelectUp]
 {chr(10).join(cmd_up_lines)}
 
 [Key_{local_var}_SelectDown]
-key = VK_DOWN
+key = VK_NEXT
 run = CommandList_{local_var}_SelectDown
 
 [CommandList_{local_var}_SelectDown]
@@ -490,7 +490,6 @@ endif
                         continue
 
             # 修改每个ini文件
-            selector_injected = False  # 选择器块只注入一次
             for ini_file, bindings in bindings_by_file.items():
                 with open(ini_file, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -518,18 +517,16 @@ endif
                         )
                         content = content.replace(old_section, new_section, 1)
 
-                # 选择器块只注入到第一个ini文件中
-                if not selector_injected:
-                    # 在 [Constants] 之后、第一个Key section之前插入选择器块
-                    # 找到第一个非Constants的section位置
-                    first_key_match = re.search(r'\n(\[Key\w+\])', content)
-                    if first_key_match:
-                        insert_pos = first_key_match.start()
-                        content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
-                    else:
-                        # 没有Key section，追加到文件末尾
-                        content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
-                    selector_injected = True
+                # 选择器块每个ini都注入，保证上下文独立计算
+                # 在 [Constants] 之后、第一个Key section之前插入选择器块
+                # 找到第一个非Constants的section位置
+                first_key_match = re.search(r'\n(\[Key\w+\])', content)
+                if first_key_match:
+                    insert_pos = first_key_match.start()
+                    content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
+                else:
+                    # 没有Key section，追加到文件末尾
+                    content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
 
                 self._ensure_writable(ini_file)
                 with open(ini_file, 'w', encoding='utf-8') as f:
@@ -791,7 +788,7 @@ class KeyConfiguratorGUI:
         self.log("")
         self.log("=" * 60)
         self.log("配置完成！使用说明：")
-        self.log("1. ↑/↓ 切换角色，Enter 显示/隐藏UI")
+        self.log("1. PageUp/PageDown 切换角色，Enter 显示/隐藏UI")
         self.log("2. 热键仅在对应角色被选中时生效，实现热键复用")
         self.log("3. 无需修改 d3dx.ini")
         self.log("")
@@ -834,7 +831,7 @@ class KeyConfiguratorGUI:
             f"已成功修改 {success_count} 个mod\n"
             f"共处理 {total_bindings} 个按键绑定\n\n"
             f"使用说明：\n"
-            f"- ↑/↓: 切换角色\n"
+            f"- PageUp/PageDown: 切换角色\n"
             f"- Enter: 显示/隐藏UI\n"
             f"- 热键仅在对应角色被选中时生效")
     

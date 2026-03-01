@@ -129,7 +129,7 @@ class UITextureGenerator:
         print("正在生成帮助文本...")
 
         help_texts = [
-            ("↑↓: 切换角色", 500, 60),
+            ("PgUp/PgDn: 切换角色", 500, 60),
             ("Enter: 显示/隐藏UI", 500, 60),
         ]
         
