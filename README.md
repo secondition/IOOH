@@ -15,17 +15,9 @@ ps：只测试了终末地模组..
 
 ## 使用方法
 
-### 1. 安装依赖
+### 1. 下载发行版包
 
-```bash
-pip install Pillow
-```
-
-### 2. 将此项目（整个文件夹）移动到Mods目录下
-
-```bash
-python key_context_configurator.py
-```
+### 2. 将包移动到Mods目录下解压，并运行exe文件
 
 在弹出的 GUI 中：
 1. 选择你的 Mods 目录
