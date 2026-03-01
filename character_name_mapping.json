@@ -3,7 +3,7 @@
   "description": "角色名称映射字典 - 用于游戏内UI显示",
   "match_rules": [
     {
-      "keywords": ["laevatain", "莱万汀", "雷瓦汀"],
+      "keywords": ["laevatain", "莱万汀"],
       "display_name": "莱万汀"
     },
     {
@@ -11,12 +11,40 @@
       "display_name": "佩丽卡"
     },
     {
-      "keywords": ["endmin", "管理员"],
+      "keywords": ["endmin", "管理员","endministrator"],
       "display_name": "管理员"
     },
     {
-      "keywords": ["qiuli", "秋栗"],
+      "keywords": ["qiuli", "秋栗","akekuri"],
       "display_name": "秋栗"
+    },
+    {
+      "keywords": ["yifeng", "伊冯","yvonne"],
+      "display_name": "伊冯"
+    },
+    {
+      "keywords": ["xaihi", "赛希"],
+      "display_name": "赛希"
+    },
+    {
+      "keywords": ["ardelia", "艾尔黛拉","小羊"],
+      "display_name": "艾尔黛拉"
+    },
+    {
+      "keywords": ["洁哥", "jie","gilberta"],
+      "display_name": "洁尔佩塔"
+    },
+    {
+      "keywords": ["ember", "余烬"],
+      "display_name": "余烬"
+    },
+    {
+      "keywords": ["别礼", "bieli","last rite"],
+      "display_name": "别礼"
+    },
+    {
+      "keywords": ["avywenna", "艾维文娜"],
+      "display_name": "艾维文娜"
     }
   ],
   "notes": [
