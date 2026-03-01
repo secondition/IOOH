@@ -51,7 +51,14 @@ class EFMIKeyConfigurator:
     def __init__(self):
         self.mods: List[ModInfo] = []
         self.mods_directory = ""
-        self.config_file = "efmi_key_config.json"
+        
+        # 确定基础路径
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            
+        self.config_file = os.path.join(base_dir, "efmi_key_config.json")
 
     @staticmethod
     def _ensure_writable(filepath: str):
@@ -285,7 +292,10 @@ class EFMIKeyConfigurator:
         - 角色列表（全部显示，选中高亮）
         """
         if output_path is None:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
+            if getattr(sys, 'frozen', False):
+                script_dir = os.path.dirname(sys.executable)
+            else:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
             output_path = os.path.join(script_dir, "IOOHmod.ini")
 
         total_chars = len(self.mods)
@@ -770,19 +780,21 @@ class KeyConfiguratorGUI:
         # 自动生成UI纹理
         self.log("正在生成UI纹理...")
         try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            result = subprocess.run(
-                [sys.executable, os.path.join(script_dir, "generate_ui_textures.py")],
-                cwd=script_dir, capture_output=True, text=True, timeout=60
-            )
-            if result.returncode == 0:
-                self.log("✓ UI纹理已自动生成")
-                for line in result.stdout.strip().splitlines():
-                    self.log(f"  {line}")
-            else:
-                self.log(f"✗ UI纹理生成失败: {result.stderr.strip()}")
+            from generate_ui_textures import UITextureGenerator
+            generator = UITextureGenerator()
+            generator.generate_all()
+            self.log("✓ UI纹理已自动生成")
         except Exception as e:
             self.log(f"✗ UI纹理生成异常: {e}")
+
+        # 删除中间文件
+        try:
+            config_path = self.configurator.config_file
+            if os.path.exists(config_path):
+                os.remove(config_path)
+                self.log("✓ 已清理中间文件 efmi_key_config.json")
+        except Exception as e:
+            self.log(f"✗ 清理中间文件失败: {e}")
 
         # 显示完成信息
         self.log("")

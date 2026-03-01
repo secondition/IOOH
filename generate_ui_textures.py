@@ -9,6 +9,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import os
 import json
+import sys
 from typing import List, Tuple
 
 
@@ -17,6 +18,11 @@ class UITextureGenerator:
 
     def __init__(self):
         self.output_dir = "resources/textures"
+        if getattr(sys, 'frozen', False):
+            self.output_dir = os.path.join(os.path.dirname(sys.executable), "resources", "textures")
+        elif __file__:
+            self.output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "textures")
+        
         self.font_size = 32
         self.bg_color = (20, 20, 30, 200)  # 深色半透明背景
         self.text_color = (255, 255, 255, 255)  # 白色文本
@@ -198,13 +204,23 @@ class UITextureGenerator:
             tuple: (character_names, mods_data)
         """
         try:
+            # 确定基础路径
+            base_dir = ""
+            if getattr(sys, 'frozen', False):
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            key_config_path = os.path.join(base_dir, 'efmi_key_config.json')
+            mapping_path = os.path.join(base_dir, 'character_name_mapping.json')
+
             # 1. 读取key配置，获取实际的mod列表
-            with open('efmi_key_config.json', 'r', encoding='utf-8') as f:
+            with open(key_config_path, 'r', encoding='utf-8') as f:
                 key_config = json.load(f)
                 mods = key_config.get('mods', [])
 
             # 2. 读取角色名称映射字典
-            with open('character_name_mapping.json', 'r', encoding='utf-8') as f:
+            with open(mapping_path, 'r', encoding='utf-8') as f:
                 mapping_data = json.load(f)
                 match_rules = mapping_data.get('match_rules', [])
 
