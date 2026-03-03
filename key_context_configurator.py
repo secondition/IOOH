@@ -152,6 +152,10 @@ class EFMIKeyConfigurator:
             # 跳过隐藏文件夹、EFMI文件夹和脚本自身所在的文件夹
             if item.startswith('.') or item.startswith('EFMI'):
                 continue
+
+            # ???? rabbitFX ????
+            if 'rabbitfx' in item.lower():
+                continue
             
             # 跳过脚本自身所在的文件夹（IOOH文件夹）
             if os.path.abspath(item_path) == script_dir:
@@ -169,6 +173,9 @@ class EFMIKeyConfigurator:
                     continue
                 
                 if ini_files:
+                    # Skip tool-generated IOOH main UI config to avoid self-scan
+                    if any(os.path.basename(f).lower() == 'ioohmod.ini' for f in ini_files):
+                        continue
                     mod = ModInfo(item, item_path, ini_files)
                     # 解析所有ini文件
                     for ini_file in ini_files:
@@ -233,11 +240,9 @@ class EFMIKeyConfigurator:
                     continue
                 
                 # 检查是否包含 key = 行
-                key_match = re.search(r'key\s*=\s*(\S+)', section_content)
-                if not key_match:
+                key = self._extract_key_from_section(section_content)
+                if not key:
                     continue
-                
-                key = key_match.group(1)
                 
                 # 提取变量名和类型
                 variable = self._extract_variable_from_section(section_content)
@@ -252,6 +257,58 @@ class EFMIKeyConfigurator:
             ini_filename = os.path.basename(ini_file_path)
             print(f"解析 {mod.name}/{ini_filename} 失败: {e}")
     
+    def _extract_key_from_section(self, section_content: str):
+        """Extract a display-friendly key string (e.g., Alt+1)."""
+        key_lines = re.findall(
+            r'^\s*key\s*=\s*(.+)$',
+            section_content,
+            flags=re.MULTILINE | re.IGNORECASE
+        )
+        if not key_lines:
+            return None
+
+        skip_tokens = {
+            'no_modifiers',
+            'any_modifiers',
+            'allow_modifiers',
+        }
+        modifier_map = {
+            'ctrl': 'Ctrl',
+            'lctrl': 'LCtrl',
+            'rctrl': 'RCtrl',
+            'shift': 'Shift',
+            'lshift': 'LShift',
+            'rshift': 'RShift',
+            'alt': 'Alt',
+            'lalt': 'LAlt',
+            'ralt': 'RAlt',
+        }
+
+        for line in key_lines:
+            tokens = [p for p in re.split(r'[,\s]+', line.strip()) if p]
+            if not tokens:
+                continue
+
+            mods = []
+            main_keys = []
+            for token in tokens:
+                lowered = token.lower()
+                if lowered in skip_tokens:
+                    continue
+                if lowered in modifier_map:
+                    mods.append(modifier_map[lowered])
+                    continue
+                main_keys.append(token)
+
+            if not main_keys:
+                continue
+
+            if mods:
+                return "+".join(mods + [main_keys[0]])
+            return main_keys[0]
+
+        return key_lines[0].strip()
+
     def _extract_variable_from_section(self, section_content: str):
         """从section内容中提取变量名"""
         var_pattern = r'\$(\w+)\s*='
@@ -727,11 +784,8 @@ class KeyConfiguratorGUI:
             ini_names = [os.path.basename(f) for f in mod.ini_files]
             key_count = len(mod.key_bindings)
             detection_info = "有检测" if mod.has_character_detection else "无检测"
-            if key_count > 15:
-                self.log(f"  ⚠ {mod.name}: {', '.join(ini_names)} ({key_count}个按键绑定，超过15个) [{detection_info}]")
-            else:
-                self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个按键绑定) [{detection_info}]")
-        
+            self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个按键绑定) [{detection_info}]")
+
         # 清空表格
         for item in self.tree.get_children():
             self.tree.delete(item)
