@@ -217,7 +217,33 @@ class EFMIKeyConfigurator:
             
         except Exception:
             return False
-    
+
+    def _iter_sections(self, content: str):
+        """迭代所有 section（更稳健，支持没有换行的 section 间隔）。"""
+        matches = list(re.finditer(r'\[([^\]]+)\]', content))
+        for idx, match in enumerate(matches):
+            name = match.group(1)
+            start = match.start()
+            end = matches[idx + 1].start() if idx + 1 < len(matches) else len(content)
+            yield name, start, end, content[start:end]
+
+    def _normalize_section_text(self, section_text: str) -> str:
+        """Normalize section text so key fields are on their own lines."""
+        text = section_text
+        # Ensure a newline right after the [Section] header.
+        text = re.sub(r'(\[[^\]]+\])([ \t]*)(?=[^\n])', r'\1\n', text, count=1)
+        # If multiple fields are on the same line, split them into lines.
+        patterns = [
+            r'key\s*=',
+            r'condition\s*=',
+            r'type\s*=',
+            r'run\s*=',
+            r'\$[A-Za-z_]\w*\s*=',
+        ]
+        for pattern in patterns:
+            text = re.sub(rf'(?i)(?<=[^\n])[ \t]+({pattern})', r'\n\1', text)
+        return text
+
     def _parse_ini_file(self, mod: ModInfo, ini_file_path: str):
         """解析ini文件，提取按键绑定 - 通用检测所有按键section"""
         try:
@@ -226,13 +252,9 @@ class EFMIKeyConfigurator:
             
             # 更通用的模式：查找所有包含 key = 的section（不限于Key开头）
             # 匹配格式：[任意section名] ... key = 某值 ... （可能有其他内容）
-            section_pattern = r'\[([^\]]+)\]\s*\n((?:.*\n)*?)(?=\n\[|$)'
-            sections = re.finditer(section_pattern, content, re.MULTILINE)
-            
-            for section_match in sections:
-                section_name = section_match.group(1)
-                section_content = section_match.group(2)
-                
+            for section_name, _, _, section_text in self._iter_sections(content):
+                section_content = section_text.split(']', 1)[-1]
+
                 # 跳过非按键相关的section（如Constants, Present等）
                 if section_name in ['Constants', 'Present', 'Resources', 'CommandList', 'TextureOverride']:
                     continue
@@ -265,6 +287,15 @@ class EFMIKeyConfigurator:
             flags=re.MULTILINE | re.IGNORECASE
         )
         if not key_lines:
+            # Fallback: key and other fields are on the same line
+            key_match = re.search(
+                r'(?i)\bkey\s*=\s*(.*?)(?=\s+[A-Za-z_][A-Za-z0-9_]*\s*=|\s+\$\w+\s*=|\s+\[|$)',
+                section_content,
+                flags=re.DOTALL,
+            )
+            if key_match:
+                key_lines = [key_match.group(1)]
+        if not key_lines:
             return None
 
         skip_tokens = {
@@ -285,7 +316,8 @@ class EFMIKeyConfigurator:
         }
 
         for line in key_lines:
-            tokens = [p for p in re.split(r'[,\s]+', line.strip()) if p]
+            cleaned_line = line.split(';', 1)[0].strip()
+            tokens = [p for p in re.split(r'[\s,]+', cleaned_line) if p]
             if not tokens:
                 continue
 
@@ -571,23 +603,28 @@ endif
                     content = content[:insert_pos] + f'global ${local_var} = 0\n' + content[insert_pos:]
 
                 # 修改每个按键绑定的Key section
-                for binding in bindings:
-                    section_pattern = rf'\[{re.escape(binding.section_name)}\](.*?)(?=\n\[|$)'
-                    match = re.search(section_pattern, content, re.DOTALL)
+                binding_map = {b.section_name: b for b in bindings}
+                sections = list(self._iter_sections(content))
+                if sections:
+                    new_parts = []
+                    last_idx = 0
+                    for section_name, start, end, section_text in sections:
+                        new_parts.append(content[last_idx:start])
+                        if section_name in binding_map:
+                            new_section = self._modify_key_section_with_context(
+                                section_text,
+                                mod.character_id,
+                                local_var,
+                            )
+                            new_parts.append(new_section)
+                        else:
+                            new_parts.append(section_text)
+                        last_idx = end
+                    new_parts.append(content[last_idx:])
+                    content = ''.join(new_parts)
 
-                    if match:
-                        old_section = match.group(0)
-                        new_section = self._modify_key_section_with_context(
-                            old_section,
-                            mod.character_id,
-                            local_var,
-                        )
-                        content = content.replace(old_section, new_section, 1)
-
-                # 选择器块每个ini都注入，保证上下文独立计算
-                # 在 [Constants] 之后、第一个Key section之前插入选择器块
-                # 找到第一个非Constants的section位置
-                first_key_match = re.search(r'\n(\[Key\w+\])', content)
+                # ?????? Key section ???????
+                first_key_match = re.search(r'\[Key\w+\]', content)
                 if first_key_match:
                     insert_pos = first_key_match.start()
                     content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
@@ -608,8 +645,8 @@ endif
             return False
     
     def _modify_key_section_with_context(self, section_content: str, character_id: int, local_var: str) -> str:
-        """修改单个按键section，添加本地选择器变量条件（不修改按键）。
-        返回修改后的Key section字符串"""
+        """Modify one key section, inject selector condition without changing the key."""
+        section_content = self._normalize_section_text(section_content)
         lines = section_content.split('\n')
         modified_lines = []
         has_condition = False
@@ -622,14 +659,13 @@ endif
                 cond_match = re.search(r'condition\s*=\s*(.+)', line)
                 if cond_match:
                     cond_text = cond_match.group(1).strip()
-                    # 清理旧的 iooh_sel / iooh_s\d+ / *_sel 条件
+                    # remove old iooh selectors
                     cond_clean = re.sub(r'\s*&&\s*\$iooh_s\d*\s*==\s*\d+', '', cond_text)
                     cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+\s*&&\s*', '', cond_clean)
                     cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+', '', cond_clean)
                     cond_clean = re.sub(r'\s*&&\s*\$iooh_sel\s*==\s*\d+', '', cond_clean)
                     cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
                     cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+', '', cond_clean)
-                    # 清理测试用的 *_sel 变量条件（如 $perlica_sel）
                     cond_clean = re.sub(r'\s*&&\s*\$\w+_sel\s*==\s*\d+', '', cond_clean)
                     cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
                     cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+', '', cond_clean)
@@ -644,7 +680,6 @@ endif
             else:
                 modified_lines.append(line)
 
-        # 如果原来没有condition行，在key行后面插入一行
         if not has_condition:
             new_lines = []
             for line in modified_lines:
