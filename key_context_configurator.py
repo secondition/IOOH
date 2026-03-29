@@ -249,7 +249,7 @@ class EFMIKeyConfigurator:
 
     def _iter_sections(self, content: str):
         """迭代所有 section（更稳健，支持没有换行的 section 间隔）。"""
-        matches = list(re.finditer(r'\[([^\]]+)\]', content))
+        matches = list(re.finditer(r'(?m)^[ \t]*\[([^\]\r\n]+)\][ \t]*$', content))
         for idx, match in enumerate(matches):
             name = match.group(1)
             start = match.start()
@@ -372,7 +372,7 @@ class EFMIKeyConfigurator:
 
     def _extract_variable_from_section(self, section_content: str):
         """从section内容中提取变量名"""
-        var_pattern = r'\$(\w+)\s*='
+        var_pattern = r'\$(\w+)\s*=(?!=)'
         match = re.search(var_pattern, section_content)
         if match:
             return f"${match.group(1)}"
