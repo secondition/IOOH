@@ -16,18 +16,22 @@ from typing import List, Tuple
 class UITextureGenerator:
     """UI纹理生成器"""
 
-    def __init__(self):
-        self.output_dir = "resources/textures"
-        if getattr(sys, 'frozen', False):
-            self.output_dir = os.path.join(os.path.dirname(sys.executable), "resources", "textures")
-        elif __file__:
-            self.output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "textures")
+    def __init__(self, base_output_dir: str = None):
+        self.base_output_dir = base_output_dir or self._get_output_dir()
+        self.output_dir = os.path.join(self.base_output_dir, "resources", "textures")
         
         self.font_size = 32
         self.bg_color = (20, 20, 30, 200)  # 深色半透明背景
         self.text_color = (255, 255, 255, 255)  # 白色文本
         self.highlight_color = (100, 200, 255, 255)  # 高亮蓝色
         self.padding = 20
+
+    @staticmethod
+    def _get_output_dir() -> str:
+        """Return the directory where generated files should be written."""
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.abspath(__file__))
         
     def setup_directories(self):
         """创建必要的目录"""
@@ -204,15 +208,8 @@ class UITextureGenerator:
             tuple: (character_names, mods_data)
         """
         try:
-            # 确定基础路径
-            base_dir = ""
-            if getattr(sys, 'frozen', False):
-                base_dir = os.path.dirname(sys.executable)
-            else:
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            key_config_path = os.path.join(base_dir, 'efmi_key_config.json')
-            mapping_path = os.path.join(base_dir, 'character_name_mapping.json')
+            key_config_path = os.path.join(self.base_output_dir, 'efmi_key_config.json')
+            mapping_path = os.path.join(self._get_output_dir(), 'character_name_mapping.json')
 
             # 1. 读取key配置，获取实际的mod列表
             with open(key_config_path, 'r', encoding='utf-8') as f:

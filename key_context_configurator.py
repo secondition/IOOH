@@ -51,14 +51,44 @@ class EFMIKeyConfigurator:
     def __init__(self):
         self.mods: List[ModInfo] = []
         self.mods_directory = ""
-        
-        # 确定基础路径
+        self.config_file = os.path.join(self._get_output_dir(), "efmi_key_config.json")
+
+    @staticmethod
+    def _get_bundle_dir() -> str:
+        """Return the directory containing bundled read-only assets."""
         if getattr(sys, 'frozen', False):
-            base_dir = os.path.dirname(sys.executable)
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            
-        self.config_file = os.path.join(base_dir, "efmi_key_config.json")
+            return getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        return os.path.dirname(os.path.abspath(__file__))
+
+    @staticmethod
+    def _get_output_dir() -> str:
+        """Return the directory where generated files should be written."""
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def _resolve_output_dir(self) -> str:
+        """Prefer the selected Mods directory for generated files."""
+        if self.mods_directory and os.path.isdir(self.mods_directory):
+            return self.mods_directory
+        return self._get_output_dir()
+
+    def _ensure_runtime_shader_assets(self):
+        """Copy bundled shader files next to the executable for 3DMigoto to read."""
+        source_dir = os.path.join(self._get_bundle_dir(), "shaders")
+        target_dir = os.path.join(self._resolve_output_dir(), "shaders")
+        if not os.path.isdir(source_dir):
+            return
+
+        os.makedirs(target_dir, exist_ok=True)
+        for root, _, files in os.walk(source_dir):
+            relative_root = os.path.relpath(root, source_dir)
+            current_target_dir = target_dir if relative_root == "." else os.path.join(target_dir, relative_root)
+            os.makedirs(current_target_dir, exist_ok=True)
+            for file in files:
+                source_file = os.path.join(root, file)
+                target_file = os.path.join(current_target_dir, file)
+                shutil.copy2(source_file, target_file)
 
     @staticmethod
     def _ensure_writable(filepath: str):
@@ -138,13 +168,14 @@ class EFMIKeyConfigurator:
     def scan_mods(self, directory: str) -> List[ModInfo]:
         """扫描目录下的所有mod，检测所有.ini文件和角色hash"""
         self.mods_directory = directory
+        self.config_file = os.path.join(self._resolve_output_dir(), "efmi_key_config.json")
         self.mods.clear()
         
         # 先恢复备份文件，确保从干净状态开始
         self.restore_backups(directory)
         
-        # 获取当前脚本所在目录的绝对路径，用于跳过自身
-        script_dir = os.path.abspath(os.path.dirname(__file__))
+        # 获取工具输出目录，用于跳过工具自身目录
+        script_dir = os.path.abspath(self._resolve_output_dir())
         
         for item in os.listdir(directory):
             item_path = os.path.join(directory, item)
@@ -238,7 +269,7 @@ class EFMIKeyConfigurator:
             r'condition\s*=',
             r'type\s*=',
             r'run\s*=',
-            r'\$[A-Za-z_]\w*\s*=',
+            r'\$[A-Za-z_]\w*\s*=(?!=)',
         ]
         for pattern in patterns:
             text = re.sub(rf'(?i)(?<=[^\n])[ \t]+({pattern})', r'\n\1', text)
@@ -380,12 +411,10 @@ class EFMIKeyConfigurator:
         布局：左下角统一面板
         - 角色列表（全部显示，选中高亮）
         """
+        self._ensure_runtime_shader_assets()
+
         if output_path is None:
-            if getattr(sys, 'frozen', False):
-                script_dir = os.path.dirname(sys.executable)
-            else:
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-            output_path = os.path.join(script_dir, "IOOHmod.ini")
+            output_path = os.path.join(self._resolve_output_dir(), "IOOHmod.ini")
 
         total_chars = len(self.mods)
         max_id = total_chars - 1 if total_chars > 0 else 0
@@ -650,35 +679,51 @@ endif
         lines = section_content.split('\n')
         modified_lines = []
         has_condition = False
+        index = 0
 
-        for line in lines:
+        while index < len(lines):
+            line = lines[index]
             stripped = line.strip()
 
-            if stripped.startswith('condition =') or stripped.startswith('condition='):
+            if re.match(r'(?i)^condition\s*=', stripped):
                 has_condition = True
-                cond_match = re.search(r'condition\s*=\s*(.+)', line)
-                if cond_match:
-                    cond_text = cond_match.group(1).strip()
-                    # remove old iooh selectors
-                    cond_clean = re.sub(r'\s*&&\s*\$iooh_s\d*\s*==\s*\d+', '', cond_text)
-                    cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+\s*&&\s*', '', cond_clean)
-                    cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+', '', cond_clean)
-                    cond_clean = re.sub(r'\s*&&\s*\$iooh_sel\s*==\s*\d+', '', cond_clean)
-                    cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
-                    cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+', '', cond_clean)
-                    cond_clean = re.sub(r'\s*&&\s*\$\w+_sel\s*==\s*\d+', '', cond_clean)
-                    cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
-                    cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+', '', cond_clean)
-                    cond_clean = cond_clean.strip()
-                    indent = line[:len(line) - len(line.lstrip())]
-                    if cond_clean:
-                        modified_lines.append(f'{indent}condition = {cond_clean} && ${local_var} == {character_id}')
-                    else:
-                        modified_lines.append(f'{indent}condition = ${local_var} == {character_id}')
-                else:
+                cond_match = re.match(r'(?i)^(\s*condition\s*=\s*)(.*)$', line)
+                if not cond_match:
                     modified_lines.append(line)
+                    index += 1
+                    continue
+
+                cond_text = cond_match.group(2).strip()
+                if not cond_text and index + 1 < len(lines):
+                    next_line = lines[index + 1]
+                    next_stripped = next_line.strip()
+                    is_field_line = re.match(
+                        r'(?i)^\s*(?:[A-Za-z_]\w*|\$[A-Za-z_]\w*)\s*=(?!=)',
+                        next_line,
+                    )
+                    if next_stripped and not next_stripped.startswith('[') and not is_field_line:
+                        cond_text = next_stripped
+                        index += 1
+
+                # remove old iooh selectors
+                cond_clean = re.sub(r'\s*&&\s*\$iooh_s\d*\s*==\s*\d+', '', cond_text)
+                cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+\s*&&\s*', '', cond_clean)
+                cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+', '', cond_clean)
+                cond_clean = re.sub(r'\s*&&\s*\$iooh_sel\s*==\s*\d+', '', cond_clean)
+                cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
+                cond_clean = re.sub(r'\$iooh_sel\s*==\s*\d+', '', cond_clean)
+                cond_clean = re.sub(r'\s*&&\s*\$\w+_sel\s*==\s*\d+', '', cond_clean)
+                cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+\s*&&\s*', '', cond_clean)
+                cond_clean = re.sub(r'\$\w+_sel\s*==\s*\d+', '', cond_clean)
+                cond_clean = cond_clean.strip()
+                indent = line[:len(line) - len(line.lstrip())]
+                if cond_clean:
+                    modified_lines.append(f'{indent}condition = {cond_clean} && ${local_var} == {character_id}')
+                else:
+                    modified_lines.append(f'{indent}condition = ${local_var} == {character_id}')
             else:
                 modified_lines.append(line)
+            index += 1
 
         if not has_condition:
             new_lines = []
@@ -870,7 +915,7 @@ class KeyConfiguratorGUI:
         self.log("正在生成UI纹理...")
         try:
             from generate_ui_textures import UITextureGenerator
-            generator = UITextureGenerator()
+            generator = UITextureGenerator(base_output_dir=self.configurator._resolve_output_dir())
             generator.generate_all()
             self.log("✓ UI纹理已自动生成")
         except Exception as e:
