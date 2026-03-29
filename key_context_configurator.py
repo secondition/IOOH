@@ -68,9 +68,7 @@ class EFMIKeyConfigurator:
         return os.path.dirname(os.path.abspath(__file__))
 
     def _resolve_output_dir(self) -> str:
-        """Prefer the selected Mods directory for generated files."""
-        if self.mods_directory and os.path.isdir(self.mods_directory):
-            return self.mods_directory
+        """Always write generated files next to the running executable."""
         return self._get_output_dir()
 
     def _ensure_runtime_shader_assets(self):
