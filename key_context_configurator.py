@@ -331,6 +331,15 @@ class EFMIKeyConfigurator:
             'no_modifiers',
             'any_modifiers',
             'allow_modifiers',
+            'no_ctrl',
+            'no_alt',
+            'no_shift',
+            'no_lctrl',
+            'no_rctrl',
+            'no_lalt',
+            'no_ralt',
+            'no_lshift',
+            'no_rshift',
         }
         modifier_map = {
             'ctrl': 'Ctrl',
@@ -840,6 +849,9 @@ class KeyConfiguratorGUI:
         
         self.root = tk.Tk()
         
+        # 隐藏窗口避免闪烁
+        self.root.withdraw()
+        
         # 尝试加载自定义图标
         try:
             icon_path = os.path.join(self.configurator._get_bundle_dir(), "icon.ico")
@@ -860,6 +872,10 @@ class KeyConfiguratorGUI:
         
         self._create_widgets()
         self._update_texts()
+        
+        # 居中并显示窗口
+        self.root.update_idletasks()
+        self.root.deiconify()
         
     def _tr(self, key: str) -> str:
         """获取翻译文本"""
