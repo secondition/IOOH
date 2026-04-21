@@ -437,11 +437,19 @@ class EFMIKeyConfigurator:
         char_w = 0.15         # 角色项宽度
         char_h = char_w * aspect * (100 / 500)  # 纹理500x100，等比缩放
         gap = 0.006           # 行间距
-
+        
+        help_w = char_w
+        help_h = help_w * aspect * (60 / 500)   # 帮助纹理500x60
+        
         # 从底部向上计算起始Y
         bottom_margin = 0.02
         total_height = total_chars * char_h + max(0, total_chars - 1) * gap
-        default_start_y = 1.0 - bottom_margin - total_height
+        total_ui_height = total_height + 2 * help_h + 3 * gap
+        default_start_y = 1.0 - bottom_margin - total_ui_height
+
+        # 面板背景大小
+        panel_w = char_w + 0.02
+        panel_h_val = total_ui_height + 0.02
 
         # 主体内容
         content = f"""; EFMI 主UI管理器 - 自动生成
@@ -472,7 +480,7 @@ $mouse_clicked = 1
 
 [CommandList_UpdateDrag]
 if $mouse_clicked
-    if cursor_x > $ui_x && cursor_x < $ui_x + {char_w:.4f} && cursor_y > $ui_y && cursor_y < $ui_y + {total_height:.4f}
+    if cursor_x > $ui_x && cursor_x < $ui_x + {panel_w:.4f} && cursor_y > $ui_y && cursor_y < $ui_y + {panel_h_val:.4f}
         if $is_dragging == 0
             $drag_start_x = cursor_x - $ui_x
             $drag_start_y = cursor_y - $ui_y
@@ -556,8 +564,28 @@ cull = none
 topology = triangle_strip
 o0 = set_viewport bb
 """
-        # 角色列表
+        # 背景和帮助提示图层
         content += f"""
+; ===== 背景面板 =====
+x87 = {panel_w:.4f}
+y87 = {panel_h_val:.4f}
+z87 = $ui_x - 0.01
+w87 = $ui_y - 0.01
+ps-t100 = ResourcePanelBackground
+Draw = 4,0
+
+; ===== 帮助提示 =====
+x87 = {help_w:.4f}
+y87 = {help_h:.4f}
+z87 = $ui_x
+w87 = $ui_y + {total_height + gap:.4f}
+ps-t100 = ResourceHelpPgUpDn
+Draw = 4,0
+
+w87 = $ui_y + {total_height + gap + help_h + gap:.4f}
+ps-t100 = ResourceHelpEnter
+Draw = 4,0
+
 ; ===== 角色列表（全部显示，选中高亮） =====
 x87 = {char_w:.4f}
 y87 = {char_h:.4f}
@@ -576,8 +604,17 @@ z87 = $ui_x
         # ===== 资源定义 =====
         content += """
 ; ===== 资源定义 =====
+[ResourcePanelBackground]
+filename = resources\\textures\\panel_background.png
+
 [ResourceUIBackground]
 filename = resources\\textures\\ui_background.png
+
+[ResourceHelpPgUpDn]
+filename = resources\\textures\\help_PgUp_PgDn__切换角色.png
+
+[ResourceHelpEnter]
+filename = resources\\textures\\help_Enter__显示_隐藏UI.png
 
 """
         # 角色纹理（normal + selected）
