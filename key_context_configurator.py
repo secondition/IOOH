@@ -774,55 +774,117 @@ endif
         return content
 
 
+GUI_TRANSLATIONS = {
+    "title": {"zh": "EFMI IOOH v1.4", "en": "EFMI IOOH v1.4"},
+    "mod_dir": {"zh": "Mods目录:", "en": "Mods Directory:"},
+    "browse": {"zh": "打开文件夹", "en": "open folder"},
+    "scan": {"zh": "自动配置并保存", "en": "Auto Config & Save"},
+    "save": {"zh": "保存", "en": "Save"},
+    "lang_btn": {"zh": "🌐 English", "en": "🌐 中文"},
+    "col_mod_name": {"zh": "Mod名称", "en": "Mod Name"},
+    "col_char_id": {"zh": "角色ID", "en": "Char ID"},
+    "col_detection": {"zh": "检测变量", "en": "Detection"},
+    "col_function": {"zh": "功能说明", "en": "Function"},
+    "col_key": {"zh": "按键", "en": "Key"},
+    "col_status": {"zh": "状态", "en": "Status"},
+    "log_frame": {"zh": "操作日志", "en": "Operation Log"}
+}
+
 class KeyConfiguratorGUI:
     """图形界面"""
     
     def __init__(self):
         self.configurator = EFMIKeyConfigurator()
+        self.lang = "zh"
         
         self.root = tk.Tk()
-        self.root.title("EFMI 按键上下文配置器 v1.0")
-        self.root.geometry("1200x700")
+        
+        # 尝试加载自定义图标
+        try:
+            icon_path = os.path.join(self.configurator._get_bundle_dir(), "icon.ico")
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+            elif os.path.exists("icon.ico"):
+                self.root.iconbitmap("icon.ico")
+        except Exception:
+            pass  # 如果图标加载失败，静默忽略，继续使用默认图标
+            
+        self.root.geometry("1400x800")
+        self.root.minsize(1000, 600)
+        
+        # ttk 样式优化
+        style = ttk.Style()
+        style.configure("TButton", padding=5)
+        style.configure("TLabel", padding=2)
         
         self._create_widgets()
+        self._update_texts()
+        
+    def _tr(self, key: str) -> str:
+        """获取翻译文本"""
+        return GUI_TRANSLATIONS.get(key, {}).get(self.lang, key)
+
+    def _toggle_lang(self):
+        """切换中英文"""
+        self.lang = "en" if self.lang == "zh" else "zh"
+        self._update_texts()
+        
+    def _update_texts(self):
+        """刷新UI文本"""
+        self.root.title(self._tr("title"))
+        self.lbl_mod_dir.config(text=self._tr("mod_dir"))
+        self.btn_browse.config(text=self._tr("browse"))
+        self.btn_scan.config(text=self._tr("scan"))
+        self.btn_save.config(text=self._tr("save"))
+        self.btn_lang.config(text=self._tr("lang_btn"))
+        
+        self.tree.heading("mod_name", text=self._tr("col_mod_name"))
+        self.tree.heading("char_id", text=self._tr("col_char_id"))
+        self.tree.heading("detection", text=self._tr("col_detection"))
+        self.tree.heading("function", text=self._tr("col_function"))
+        self.tree.heading("key", text=self._tr("col_key"))
+        self.tree.heading("status", text=self._tr("col_status"))
+        
+        self.log_frame.config(text=self._tr("log_frame"))
         
     def _create_widgets(self):
         """创建界面组件"""
         # 顶部工具栏
         toolbar = ttk.Frame(self.root)
-        toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        toolbar.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
         
-        ttk.Label(toolbar, text="Mods目录:").pack(side=tk.LEFT, padx=5)
+        self.lbl_mod_dir = ttk.Label(toolbar)
+        self.lbl_mod_dir.pack(side=tk.LEFT, padx=(0, 5))
         
-        self.dir_entry = ttk.Entry(toolbar, width=50)
-        self.dir_entry.pack(side=tk.LEFT, padx=5)
+        self.dir_entry = ttk.Entry(toolbar, width=60)
+        self.dir_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         self.dir_entry.insert(0, r"d:\ikun\Downloads\endfield")
         
-        ttk.Button(toolbar, text="浏览...", command=self._browse_directory).pack(side=tk.LEFT)
-        ttk.Button(toolbar, text="扫描并自动配置", command=self._scan_mods).pack(side=tk.LEFT, padx=5)
-        ttk.Button(toolbar, text="保存", command=self._apply_changes).pack(side=tk.LEFT, padx=5)
+        self.btn_browse = ttk.Button(toolbar, command=self._browse_directory)
+        self.btn_browse.pack(side=tk.LEFT, padx=2)
+        self.btn_scan = ttk.Button(toolbar, command=self._scan_mods)
+        self.btn_scan.pack(side=tk.LEFT, padx=2)
+        self.btn_save = ttk.Button(toolbar, command=self._apply_changes)
+        self.btn_save.pack(side=tk.LEFT, padx=2)
+        
+        # 语言切换按钮靠右
+        self.btn_lang = ttk.Button(toolbar, command=self._toggle_lang)
+        self.btn_lang.pack(side=tk.RIGHT, padx=5)
         
         # 主要内容区域
         main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         # 创建表格
         columns = ("mod_name", "char_id", "detection", "function", "key", "status")
         self.tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
 
-        self.tree.heading("mod_name", text="Mod名称")
-        self.tree.heading("char_id", text="角色ID")
-        self.tree.heading("detection", text="检测变量")
-        self.tree.heading("function", text="功能说明")
-        self.tree.heading("key", text="按键")
-        self.tree.heading("status", text="状态")
-
-        self.tree.column("mod_name", width=180)
-        self.tree.column("char_id", width=60)
-        self.tree.column("detection", width=80)
-        self.tree.column("function", width=120)
-        self.tree.column("key", width=100)
-        self.tree.column("status", width=120)
+        self.tree.column("mod_name", width=250, anchor=tk.W)
+        self.tree.column("char_id", width=80, anchor=tk.CENTER)
+        self.tree.column("detection", width=100, anchor=tk.CENTER)
+        self.tree.column("function", width=200, anchor=tk.W)
+        self.tree.column("key", width=150, anchor=tk.W)
+        self.tree.column("status", width=120, anchor=tk.CENTER)
         
         # 滚动条
         scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -832,11 +894,11 @@ class KeyConfiguratorGUI:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # 底部日志区域
-        log_frame = ttk.LabelFrame(self.root, text="操作日志")
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.log_frame = ttk.LabelFrame(self.root)
+        self.log_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(5, 10))
         
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=8)
-        self.log_text.pack(fill=tk.BOTH, expand=True)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, height=10, font=("Consolas", 10))
+        self.log_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
     def _browse_directory(self):
         """浏览目录"""

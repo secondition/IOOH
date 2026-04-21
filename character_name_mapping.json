@@ -4,47 +4,51 @@
   "match_rules": [
     {
       "keywords": ["laevatain", "莱万汀"],
-      "display_name": "莱万汀"
+      "display_name": "laevatain"
     },
     {
       "keywords": ["perlica", "pelica", "佩丽卡"],
-      "display_name": "佩丽卡"
+      "display_name": "perlica"
     },
     {
       "keywords": ["endmin", "管理员","endministrator"],
-      "display_name": "管理员"
+      "display_name": "endministrator"
     },
     {
       "keywords": ["qiuli", "秋栗","akekuri"],
-      "display_name": "秋栗"
+      "display_name": "akekuri"
     },
     {
       "keywords": ["yifeng", "伊冯","yvonne"],
-      "display_name": "伊冯"
+      "display_name": "yvonne"
     },
     {
       "keywords": ["xaihi", "赛希"],
-      "display_name": "赛希"
+      "display_name": "xaihi"
     },
     {
       "keywords": ["ardelia", "艾尔黛拉","小羊"],
-      "display_name": "艾尔黛拉"
+      "display_name": "ardelia"
     },
     {
       "keywords": ["洁哥", "jie","gilberta"],
-      "display_name": "洁尔佩塔"
+      "display_name": "gilberta"
     },
     {
       "keywords": ["ember", "余烬"],
-      "display_name": "余烬"
+      "display_name": "ember"
     },
     {
       "keywords": ["别礼", "last rite","lastrite"],
-      "display_name": "别礼"
+      "display_name": "last rite"
     },
     {
       "keywords": ["avywenna", "艾维文娜"],
-      "display_name": "艾维文娜"
+      "display_name": "avywenna"
+    },
+    {
+      "keywords": ["zhuangfangyi", "庄方宜"],
+      "display_name": "zhuangfangyi"
     }
   ],
   "notes": [
