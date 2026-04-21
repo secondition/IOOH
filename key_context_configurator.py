@@ -432,7 +432,7 @@ class EFMIKeyConfigurator:
         # 从底部向上计算起始Y
         bottom_margin = 0.02
         total_height = total_chars * char_h + max(0, total_chars - 1) * gap
-        start_y = 1.0 - bottom_margin - total_height
+        default_start_y = 1.0 - bottom_margin - total_height
 
         # 主体内容
         content = f"""; EFMI 主UI管理器 - 自动生成
@@ -445,6 +445,47 @@ class EFMIKeyConfigurator:
 global $show_character_ui = 1
 global $total_characters = {total_chars}
 global $iooh_sel = 0
+
+; 拖拽控制变量
+global persist $ui_x = {left_x:.4f}
+global persist $ui_y = {default_start_y:.4f}
+global $mouse_clicked = 0
+global $is_dragging = 0
+global $drag_start_x = 0
+global $drag_start_y = 0
+
+; 鼠标拖拽检测 (仅当UI显示时)
+[KeyMouseDrag]
+condition = $show_character_ui == 1
+key = VK_LBUTTON
+type = hold
+$mouse_clicked = 1
+
+[CommandList_UpdateDrag]
+if $mouse_clicked
+    if cursor_x > $ui_x && cursor_x < $ui_x + {char_w:.4f} && cursor_y > $ui_y && cursor_y < $ui_y + {total_height:.4f}
+        if $is_dragging == 0
+            $drag_start_x = cursor_x - $ui_x
+            $drag_start_y = cursor_y - $ui_y
+            $is_dragging = 1
+        endif
+    endif
+else
+    $is_dragging = 0
+endif
+
+if $is_dragging
+    $ui_x = cursor_x - $drag_start_x
+    $ui_y = cursor_y - $drag_start_y
+endif
+
+; UI复位快捷键
+[KeyEFMI_ResetUIPosition]
+condition = $show_character_ui == 1
+key = ctrl no_alt /
+type = cycle
+$ui_x = {left_x:.4f}
+$ui_y = {default_start_y:.4f}
 
 ; PageUp: 反向循环（$iooh_sel == -1 时不响应）
 [KeyEFMI_SelectUp]
@@ -479,7 +520,7 @@ run = CommandList_SelectDown
         content += """
 ; Enter: 切换UI显示，同时切换 $iooh_sel（-1=禁用选择器）
 [KeyEFMI_ToggleUI]
-key = VK_RETURN
+key = no_ctrl no_alt VK_RETURN
 run = CommandList_ToggleUI
 
 [CommandList_ToggleUI]
@@ -493,6 +534,7 @@ endif
 
 [Present]
 if $show_character_ui == 1
+    run = CommandList_UpdateDrag
     run = CustomShaderDrawUI
 endif
 
@@ -506,22 +548,21 @@ topology = triangle_strip
 o0 = set_viewport bb
 """
         # 角色列表
-        y = start_y
         content += f"""
 ; ===== 角色列表（全部显示，选中高亮） =====
 x87 = {char_w:.4f}
 y87 = {char_h:.4f}
-z87 = {left_x:.4f}
+z87 = $ui_x
 """
         for i, mod in enumerate(self.mods):
-            content += f"w87 = {y:.4f}\n"
+            offset_y = i * (char_h + gap)
+            content += f"w87 = $ui_y + {offset_y:.4f}\n"
             content += f"if $iooh_sel == {mod.character_id}\n"
             content += f"    ps-t100 = ResourceCharacter{mod.character_id}Selected\n"
             content += f"else\n"
             content += f"    ps-t100 = ResourceCharacter{mod.character_id}Normal\n"
             content += f"endif\n"
             content += "Draw = 4,0\n"
-            y += char_h + gap
 
         # ===== 资源定义 =====
         content += """
@@ -589,7 +630,7 @@ run = CommandList_{local_var}_SelectDown
 {chr(10).join(cmd_down_lines)}
 
 [Key_{local_var}_ToggleUI]
-key = VK_RETURN
+key = no_ctrl no_alt VK_RETURN
 run = CommandList_{local_var}_ToggleUI
 
 [CommandList_{local_var}_ToggleUI]
@@ -779,7 +820,6 @@ GUI_TRANSLATIONS = {
     "mod_dir": {"zh": "Mods目录:", "en": "Mods Directory:"},
     "browse": {"zh": "打开文件夹", "en": "open folder"},
     "scan": {"zh": "自动配置并保存", "en": "Auto Config & Save"},
-    "save": {"zh": "保存", "en": "Save"},
     "lang_btn": {"zh": "🌐 English", "en": "🌐 中文"},
     "col_mod_name": {"zh": "Mod名称", "en": "Mod Name"},
     "col_char_id": {"zh": "角色ID", "en": "Char ID"},
@@ -787,6 +827,7 @@ GUI_TRANSLATIONS = {
     "col_function": {"zh": "功能说明", "en": "Function"},
     "col_key": {"zh": "按键", "en": "Key"},
     "col_status": {"zh": "状态", "en": "Status"},
+    "status_configured": {"zh": "✓ 已配置", "en": "✓ Configured"},
     "log_frame": {"zh": "操作日志", "en": "Operation Log"}
 }
 
@@ -835,7 +876,6 @@ class KeyConfiguratorGUI:
         self.lbl_mod_dir.config(text=self._tr("mod_dir"))
         self.btn_browse.config(text=self._tr("browse"))
         self.btn_scan.config(text=self._tr("scan"))
-        self.btn_save.config(text=self._tr("save"))
         self.btn_lang.config(text=self._tr("lang_btn"))
         
         self.tree.heading("mod_name", text=self._tr("col_mod_name"))
@@ -844,6 +884,14 @@ class KeyConfiguratorGUI:
         self.tree.heading("function", text=self._tr("col_function"))
         self.tree.heading("key", text=self._tr("col_key"))
         self.tree.heading("status", text=self._tr("col_status"))
+        
+        # 刷新所有行的状态文本
+        for item in self.tree.get_children():
+            vals = list(self.tree.item(item, 'values'))
+            if vals:
+                # 状态位于第6列（索引5）
+                vals[5] = self._tr("status_configured")
+                self.tree.item(item, values=vals)
         
         self.log_frame.config(text=self._tr("log_frame"))
         
@@ -864,8 +912,6 @@ class KeyConfiguratorGUI:
         self.btn_browse.pack(side=tk.LEFT, padx=2)
         self.btn_scan = ttk.Button(toolbar, command=self._scan_mods)
         self.btn_scan.pack(side=tk.LEFT, padx=2)
-        self.btn_save = ttk.Button(toolbar, command=self._apply_changes)
-        self.btn_save.pack(side=tk.LEFT, padx=2)
         
         # 语言切换按钮靠右
         self.btn_lang = ttk.Button(toolbar, command=self._toggle_lang)
@@ -956,7 +1002,7 @@ class KeyConfiguratorGUI:
                     "✓" if mod.has_character_detection else "✗",
                     binding.description,
                     binding.key,
-                    "✓ 已配置"
+                    self._tr("status_configured")
                 ))
         
         total_bindings = sum(len(m.key_bindings) for m in mods)
@@ -999,47 +1045,6 @@ class KeyConfiguratorGUI:
         self.log("3. 无需修改 d3dx.ini")
         self.log("")
         self.log("=" * 60)
-    
-    
-    def _apply_changes(self):
-        """重新应用选择器上下文到所有mod"""
-        if not self.configurator.mods:
-            messagebox.showwarning("警告", "请先扫描mods！")
-            return
-
-        if not messagebox.askyesno("确认保存",
-            "确定要重新应用选择器上下文吗？\n\n"
-            "此操作将重新注入选择器变量和condition条件。\n"
-            "注意：不会重新备份文件。"):
-            return
-
-        self.log("开始重新应用...")
-        success_count = 0
-
-        for mod in self.configurator.mods:
-            if self.configurator.modify_mod_ini(mod, create_backup=False):
-                success_count += 1
-                self.log(f"✓ {mod.name} 已保存 (ID={mod.character_id}, {len(mod.key_bindings)}个按键)")
-
-                for item in self.tree.get_children():
-                    values = self.tree.item(item, 'values')
-                    if values[0] == mod.name:
-                        self.tree.item(item, values=(
-                            values[0], values[1], values[2], values[3], values[4], "✓ 已保存"
-                        ))
-            else:
-                self.log(f"✗ {mod.name} 保存失败")
-
-        self.log(f"保存完成: {success_count}/{len(self.configurator.mods)} 个mod成功")
-
-        total_bindings = sum(len(m.key_bindings) for m in self.configurator.mods)
-        messagebox.showinfo("完成",
-            f"已成功修改 {success_count} 个mod\n"
-            f"共处理 {total_bindings} 个按键绑定\n\n"
-            f"使用说明：\n"
-            f"- PageUp/PageDown: 切换角色\n"
-            f"- Enter: 显示/隐藏UI\n"
-            f"- 热键仅在对应角色被选中时生效")
     
     def log(self, message: str):
         """添加日志"""
