@@ -182,8 +182,12 @@ class EFMIKeyConfigurator:
             if item.startswith('.') or item.startswith('EFMI'):
                 continue
 
-            # ???? rabbitFX ????
+            # 忽略 rabbitFX 相关
             if 'rabbitfx' in item.lower():
+                continue
+                
+            # 根据用户要求增加跳过的文件夹关键字：UI, 大世界, 功能
+            if any(keyword in item.lower() for keyword in ['ui', '大世界', '功能']):
                 continue
             
             # 跳过脚本自身所在的文件夹（IOOH文件夹）
