@@ -93,6 +93,11 @@ class EFMIKeyConfigurator:
         """移除文件只读属性（如有）"""
         if os.path.exists(filepath) and not os.access(filepath, os.W_OK):
             os.chmod(filepath, stat.S_IWRITE | stat.S_IREAD)
+
+    @staticmethod
+    def _is_disabled_folder(folder_name: str) -> bool:
+        """Return True when a folder name marks it as disabled."""
+        return "disabled" in os.path.basename(os.path.normpath(folder_name)).lower()
         
     def restore_backups(self, directory: str):
         """恢复所有备份文件，确保从干净状态开始"""
@@ -100,6 +105,8 @@ class EFMIKeyConfigurator:
         restored_count = 0
         
         for root, dirs, files in os.walk(directory):
+            dirs[:] = [d for d in dirs if not self._is_disabled_folder(d)]
+
             for file in files:
                 if file.endswith('.backup'):
                     backup_path = os.path.join(root, file)
@@ -182,6 +189,9 @@ class EFMIKeyConfigurator:
             if item.startswith('.') or item.startswith('EFMI'):
                 continue
 
+            if self._is_disabled_folder(item):
+                continue
+
             # 忽略 rabbitFX 相关
             if 'rabbitfx' in item.lower():
                 continue
@@ -198,7 +208,9 @@ class EFMIKeyConfigurator:
                 # 递归查找该文件夹下所有.ini文件（包括子文件夹）
                 ini_files = []
                 try:
-                    for root, _, files in os.walk(item_path):
+                    for root, dirs, files in os.walk(item_path):
+                        dirs[:] = [d for d in dirs if not self._is_disabled_folder(d)]
+
                         for file in files:
                             if file.lower().endswith('.ini'):
                                 ini_files.append(os.path.join(root, file))
