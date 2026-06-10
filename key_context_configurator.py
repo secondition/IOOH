@@ -4,7 +4,8 @@
 
 核心机制：本地选择器变量
 - 每个mod声明自己的本地选择器变量 $iooh_s<id>
-- 每个mod拥有自己的 VK_PRIOR/VK_NEXT 处理器，同步循环选择器值
+- 每个mod拥有自己的 VK_LEFT/VK_RIGHT 处理器，同步循环选择器值
+  （三方监听同一物理按键、各自相同计数，实现无通信巧合同步）
 - Key section 保留原有type，condition 使用本地变量判断
 - 3DMigoto Key condition 只能可靠引用同文件变量，跨文件引用无效
 """
@@ -72,10 +73,20 @@ class EFMIKeyConfigurator:
         return self._get_output_dir()
 
     def _ensure_runtime_shader_assets(self):
-        """Copy bundled shader files next to the executable for 3DMigoto to read."""
-        source_dir = os.path.join(self._get_bundle_dir(), "shaders")
-        target_dir = os.path.join(self._resolve_output_dir(), "shaders")
+        """Copy bundled runtime assets (shaders + muban 模板) next to the executable."""
+        self._copy_bundled_tree("shaders")
+        # muban 模板随包分发；用户头像放在 resources/avatars，不在此覆盖
+        self._copy_bundled_file(os.path.join("resources", "textures", "muban.png"))
+
+    def _copy_bundled_tree(self, rel_dir: str):
+        """Copy a bundled directory tree to the output dir (skip when identical)."""
+        source_dir = os.path.join(self._get_bundle_dir(), rel_dir)
+        target_dir = os.path.join(self._resolve_output_dir(), rel_dir)
         if not os.path.isdir(source_dir):
+            return
+
+        # 开发环境下 bundle 目录与输出目录相同，源即目标，无需复制
+        if os.path.normcase(os.path.abspath(source_dir)) == os.path.normcase(os.path.abspath(target_dir)):
             return
 
         os.makedirs(target_dir, exist_ok=True)
@@ -87,6 +98,17 @@ class EFMIKeyConfigurator:
                 source_file = os.path.join(root, file)
                 target_file = os.path.join(current_target_dir, file)
                 shutil.copy2(source_file, target_file)
+
+    def _copy_bundled_file(self, rel_path: str):
+        """Copy a single bundled file to the output dir (skip when identical)."""
+        source_file = os.path.join(self._get_bundle_dir(), rel_path)
+        target_file = os.path.join(self._resolve_output_dir(), rel_path)
+        if not os.path.isfile(source_file):
+            return
+        if os.path.normcase(os.path.abspath(source_file)) == os.path.normcase(os.path.abspath(target_file)):
+            return
+        os.makedirs(os.path.dirname(target_file), exist_ok=True)
+        shutil.copy2(source_file, target_file)
 
     @staticmethod
     def _ensure_writable(filepath: str):
@@ -447,25 +469,27 @@ class EFMIKeyConfigurator:
         for mod in self.mods:
             char_mapping += f"; {mod.character_id} = {mod.name}\n"
 
-        # === 布局参数（基于16:9屏幕等比例缩放） ===
+        # === 布局参数 ===
+        # 一页一个角色：muban 作为背景模板（已内置按键提示与箭头），
+        # 其上叠加「头像层」与「文字层」。三层共用同一面板四边形，
+        # 对齐由叠加层画布与 muban 等大保证。
         aspect = 16 / 9       # 屏幕宽高比
         left_x = 0.01         # 左侧起始X
-        char_w = 0.15         # 角色项宽度
-        char_h = char_w * aspect * (100 / 500)  # 纹理500x100，等比缩放
-        gap = 0.006           # 行间距
-        
-        help_w = char_w
-        help_h = help_w * aspect * (60 / 500)   # 帮助纹理500x60
-        
-        # 从底部向上计算起始Y
-        bottom_margin = 0.02
-        total_height = total_chars * char_h + max(0, total_chars - 1) * gap
-        total_ui_height = total_height + 2 * help_h + 3 * gap
-        default_start_y = 1.0 - bottom_margin - total_ui_height
 
-        # 面板背景大小
-        panel_w = char_w + 0.02
-        panel_h_val = total_ui_height + 0.02
+        # 面板宽度（占屏宽比例）；高度按 muban 宽高比换算为等比方块
+        panel_w = 0.45                                   # 模板宽度
+        muban_aspect = 1042 / 1509                       # muban 高/宽
+        panel_h_val = panel_w * aspect * muban_aspect    # 等比缩放，保持不变形
+
+        # 从底部向上计算起始Y
+        bottom_margin = 0.04
+        default_start_y = 1.0 - bottom_margin - panel_h_val
+
+        # 每个角色一个启用标志（与各 mod ini 的 $iooh_en<id> 平行），
+        # 让菜单侧也能存储并反映每个角色的启用状态
+        enable_decls = "".join(
+            f"global $iooh_en{mod.character_id} = 0\n" for mod in self.mods
+        )
 
         # 主体内容
         content = f"""; EFMI 主UI管理器 - 自动生成
@@ -475,10 +499,10 @@ class EFMIKeyConfigurator:
 {char_mapping}
 
 [Constants]
-global $show_character_ui = 1
+global $show_character_ui = 0
 global $total_characters = {total_chars}
-global $iooh_sel = 0
-
+global $iooh_sel = -1
+{enable_decls}
 ; 拖拽控制变量
 global persist $ui_x = {left_x:.4f}
 global persist $ui_y = {default_start_y:.4f}
@@ -520,14 +544,28 @@ type = cycle
 $ui_x = {left_x:.4f}
 $ui_y = {default_start_y:.4f}
 
-; PageUp: 反向循环（$iooh_sel == -1 时不响应）
-[KeyEFMI_SelectUp]
-key = VK_PRIOR
-run = CommandList_SelectUp
+; UP: 呼出/隐藏菜单
+[KeyEFMI_ToggleMenu]
+key = no_ctrl no_alt VK_UP
+run = CommandList_ToggleMenu
 
-[CommandList_SelectUp]
+[CommandList_ToggleMenu]
+if $show_character_ui == 1
+    $show_character_ui = 0
+    $iooh_sel = -1
+else
+    $show_character_ui = 1
+    $iooh_sel = 0
+endif
+
+; LEFT: 上一个角色（$iooh_sel == -1 时不响应）
+[KeyEFMI_PrevChar]
+key = no_ctrl no_alt VK_LEFT
+run = CommandList_PrevChar
+
+[CommandList_PrevChar]
 """
-        # 生成上键循环逻辑，-1不在条件中所以自动跳过
+        # 生成上一个角色循环逻辑，-1不在条件中所以自动跳过
         for i in range(total_chars):
             keyword = "if" if i == 0 else "elif"
             prev_val = (i - 1) % total_chars
@@ -536,12 +574,12 @@ run = CommandList_SelectUp
             content += "endif\n"
 
         content += """
-; PageDown: 正向循环（$iooh_sel == -1 时不响应）
-[KeyEFMI_SelectDown]
-key = VK_NEXT
-run = CommandList_SelectDown
+; RIGHT: 下一个角色（$iooh_sel == -1 时不响应）
+[KeyEFMI_NextChar]
+key = no_ctrl no_alt VK_RIGHT
+run = CommandList_NextChar
 
-[CommandList_SelectDown]
+[CommandList_NextChar]
 """
         for i in range(total_chars):
             keyword = "if" if i == 0 else "elif"
@@ -551,20 +589,21 @@ run = CommandList_SelectDown
             content += "endif\n"
 
         content += """
-; Enter: 切换UI显示，同时切换 $iooh_sel（-1=禁用选择器）
-[KeyEFMI_ToggleUI]
-key = no_ctrl no_alt VK_RETURN
-run = CommandList_ToggleUI
+; DOWN: 启用/禁用当前聚焦的角色（翻转该 id 对应的 $iooh_en<id>）
+[KeyEFMI_EnableToggle]
+key = no_ctrl no_alt VK_DOWN
+run = CommandList_EnableToggle
 
-[CommandList_ToggleUI]
-if $show_character_ui == 1
-    $show_character_ui = 0
-    $iooh_sel = -1
-else
-    $show_character_ui = 1
-    $iooh_sel = 0
-endif
+[CommandList_EnableToggle]
+"""
+        for i in range(total_chars):
+            keyword = "if" if i == 0 else "elif"
+            content += f"{keyword} $iooh_sel == {i}\n"
+            content += f"    if $iooh_en{i} == 1\n        $iooh_en{i} = 0\n    else\n        $iooh_en{i} = 1\n    endif\n"
+        if total_chars > 0:
+            content += "endif\n"
 
+        content += """
 [Present]
 if $show_character_ui == 1
     run = CommandList_UpdateDrag
@@ -580,66 +619,54 @@ cull = none
 topology = triangle_strip
 o0 = set_viewport bb
 """
-        # 背景和帮助提示图层
+        # 三层叠加：muban 背景 → 头像层 → 文字层，共用同一面板四边形
         content += f"""
-; ===== 背景面板 =====
+; ===== 面板四边形（三层共用） =====
 x87 = {panel_w:.4f}
 y87 = {panel_h_val:.4f}
-z87 = $ui_x - 0.01
-w87 = $ui_y - 0.01
-ps-t100 = ResourcePanelBackground
-Draw = 4,0
-
-; ===== 帮助提示 =====
-x87 = {help_w:.4f}
-y87 = {help_h:.4f}
 z87 = $ui_x
-w87 = $ui_y + {total_height + gap:.4f}
-ps-t100 = ResourceHelpPgUpDn
+w87 = $ui_y
+
+; ===== 第1层：muban 背景模板（已内置按键提示与箭头） =====
+ps-t100 = ResourceMuban
 Draw = 4,0
 
-w87 = $ui_y + {total_height + gap + help_h + gap:.4f}
-ps-t100 = ResourceHelpEnter
-Draw = 4,0
-
-; ===== 角色列表（全部显示，选中高亮） =====
-x87 = {char_w:.4f}
-y87 = {char_h:.4f}
-z87 = $ui_x
+; ===== 第2层：当前角色头像（白框位置；无头像则为问号） =====
 """
         for i, mod in enumerate(self.mods):
-            offset_y = i * (char_h + gap)
-            content += f"w87 = $ui_y + {offset_y:.4f}\n"
-            content += f"if $iooh_sel == {mod.character_id}\n"
-            content += f"    ps-t100 = ResourceCharacter{mod.character_id}Selected\n"
-            content += f"else\n"
-            content += f"    ps-t100 = ResourceCharacter{mod.character_id}Normal\n"
-            content += f"endif\n"
-            content += "Draw = 4,0\n"
+            keyword = "if" if i == 0 else "elif"
+            content += f"{keyword} $iooh_sel == {mod.character_id}\n"
+            content += f"    ps-t100 = ResourceAvatar{mod.character_id}\n"
+        if total_chars > 0:
+            content += "endif\n"
+        content += "Draw = 4,0\n"
+
+        content += """
+; ===== 第3层：当前角色文字（白框右侧） =====
+"""
+        for i, mod in enumerate(self.mods):
+            keyword = "if" if i == 0 else "elif"
+            content += f"{keyword} $iooh_sel == {mod.character_id}\n"
+            content += f"    ps-t100 = ResourceText{mod.character_id}\n"
+        if total_chars > 0:
+            content += "endif\n"
+        content += "Draw = 4,0\n"
 
         # ===== 资源定义 =====
         content += """
 ; ===== 资源定义 =====
-[ResourcePanelBackground]
-filename = resources\\textures\\panel_background.png
-
-[ResourceUIBackground]
-filename = resources\\textures\\ui_background.png
-
-[ResourceHelpPgUpDn]
-filename = resources\\textures\\help_PgUp_PgDn__切换角色.png
-
-[ResourceHelpEnter]
-filename = resources\\textures\\help_Enter__显示_隐藏UI.png
+[ResourceMuban]
+filename = resources\\textures\\muban.png
 
 """
-        # 角色纹理（normal + selected）
+        # 角色头像层与文字层（一页一个）
         for mod in self.mods:
-            content += f"""[ResourceCharacter{mod.character_id}Normal]
-filename = resources\\textures\\character_{mod.character_id}_normal.png
+            content += f"""[ResourceAvatar{mod.character_id}]
+filename = resources\\textures\\character_{mod.character_id}_avatar.png
 
-[ResourceCharacter{mod.character_id}Selected]
-filename = resources\\textures\\character_{mod.character_id}_selected.png
+[ResourceText{mod.character_id}]
+filename = resources\\textures\\character_{mod.character_id}_text.png
+
 
 """
 
@@ -662,6 +689,7 @@ filename = resources\\textures\\character_{mod.character_id}_selected.png
 
             total_chars = len(self.mods)
             local_var = f'iooh_s{mod.character_id}'
+            enable_var = f'iooh_en{mod.character_id}'
 
             # 生成上下键 CommandList 循环逻辑
             cmd_up_lines = []
@@ -678,28 +706,30 @@ filename = resources\\textures\\character_{mod.character_id}_selected.png
 
             selector_block = f"""; ===== IOOH 本地选择器 =====
 [Key_{local_var}_SelectUp]
-key = VK_PRIOR
+key = no_ctrl no_alt VK_LEFT
 run = CommandList_{local_var}_SelectUp
 
 [CommandList_{local_var}_SelectUp]
 {chr(10).join(cmd_up_lines)}
 
 [Key_{local_var}_SelectDown]
-key = VK_NEXT
+key = no_ctrl no_alt VK_RIGHT
 run = CommandList_{local_var}_SelectDown
 
 [CommandList_{local_var}_SelectDown]
 {chr(10).join(cmd_down_lines)}
 
 [Key_{local_var}_ToggleUI]
-key = no_ctrl no_alt VK_RETURN
+key = no_ctrl no_alt VK_DOWN
 run = CommandList_{local_var}_ToggleUI
 
 [CommandList_{local_var}_ToggleUI]
-if ${local_var} == -1
-    ${local_var} = 0
-else
-    ${local_var} = -1
+if ${local_var} == {mod.character_id}
+    if ${enable_var} == 1
+        ${enable_var} = 0
+    else
+        ${enable_var} = 1
+    endif
 endif
 ; ===== IOOH 本地选择器结束 ====="""
 
@@ -727,10 +757,12 @@ endif
                 content = self._strip_local_selector(content)
 
                 # 注入本地选择器变量到 [Constants] section
+                # $iooh_s<id>：聚焦角色（初始 0，让 ←→ 立即可循环切换）
+                # $iooh_en<id>：启用标志（初始 0，VK_DOWN 对当前聚焦角色翻转）
                 constants_match = re.search(r'(\[Constants\]\s*\n)', content)
                 if constants_match:
                     insert_pos = constants_match.end()
-                    content = content[:insert_pos] + f'global ${local_var} = 0\n' + content[insert_pos:]
+                    content = content[:insert_pos] + f'global ${local_var} = 0\nglobal ${enable_var} = 0\n' + content[insert_pos:]
 
                 # 修改每个按键绑定的Key section
                 binding_map = {b.section_name: b for b in bindings}
@@ -745,6 +777,7 @@ endif
                                 section_text,
                                 mod.character_id,
                                 local_var,
+                                enable_var,
                             )
                             new_parts.append(new_section)
                         else:
@@ -774,8 +807,12 @@ endif
             traceback.print_exc()
             return False
     
-    def _modify_key_section_with_context(self, section_content: str, character_id: int, local_var: str) -> str:
-        """Modify one key section, inject selector condition without changing the key."""
+    def _modify_key_section_with_context(self, section_content: str, character_id: int, local_var: str, enable_var: str) -> str:
+        """Modify one key section, inject enable condition without changing the key.
+
+        门控条件用启用标志 ${enable_var} == 1：角色被 VK_DOWN 启用后键才生效，
+        切换聚焦不影响已启用角色的键继续工作。
+        """
         section_content = self._normalize_section_text(section_content)
         lines = section_content.split('\n')
         modified_lines = []
@@ -807,7 +844,10 @@ endif
                         index += 1
 
                 # remove old iooh selectors
-                cond_clean = re.sub(r'\s*&&\s*\$iooh_s\d*\s*==\s*\d+', '', cond_text)
+                cond_clean = re.sub(r'\s*&&\s*\$iooh_en\d*\s*==\s*\d+', '', cond_text)
+                cond_clean = re.sub(r'\$iooh_en\d*\s*==\s*\d+\s*&&\s*', '', cond_clean)
+                cond_clean = re.sub(r'\$iooh_en\d*\s*==\s*\d+', '', cond_clean)
+                cond_clean = re.sub(r'\s*&&\s*\$iooh_s\d*\s*==\s*\d+', '', cond_clean)
                 cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+\s*&&\s*', '', cond_clean)
                 cond_clean = re.sub(r'\$iooh_s\d*\s*==\s*\d+', '', cond_clean)
                 cond_clean = re.sub(r'\s*&&\s*\$iooh_sel\s*==\s*\d+', '', cond_clean)
@@ -819,9 +859,9 @@ endif
                 cond_clean = cond_clean.strip()
                 indent = line[:len(line) - len(line.lstrip())]
                 if cond_clean:
-                    modified_lines.append(f'{indent}condition = {cond_clean} && ${local_var} == {character_id}')
+                    modified_lines.append(f'{indent}condition = {cond_clean} && ${enable_var} == 1')
                 else:
-                    modified_lines.append(f'{indent}condition = ${local_var} == {character_id}')
+                    modified_lines.append(f'{indent}condition = ${enable_var} == 1')
             else:
                 modified_lines.append(line)
             index += 1
@@ -833,7 +873,7 @@ endif
                 stripped = line.strip()
                 if stripped.startswith('key =') or stripped.startswith('key='):
                     indent = line[:len(line) - len(line.lstrip())]
-                    new_lines.append(f'{indent}condition = ${local_var} == {character_id}')
+                    new_lines.append(f'{indent}condition = ${enable_var} == 1')
             modified_lines = new_lines
 
         return '\n'.join(modified_lines)
@@ -843,8 +883,9 @@ endif
         # 移除 global persist $selected_character 行
         content = re.sub(r'^.*\$selected_character.*\n', '', content, flags=re.MULTILINE)
 
-        # 移除本地选择器变量声明 global $iooh_s<N> = 0 或 -1
+        # 移除本地选择器变量声明 global $iooh_s<N> / $iooh_en<N> = 0 或 -1
         content = re.sub(r'^global \$iooh_s\d+\s*=\s*-?\d+\s*\n', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^global \$iooh_en\d+\s*=\s*-?\d+\s*\n', '', content, flags=re.MULTILINE)
 
         # 移除旧版 [KeySelectUp]/[KeySelectDown] 及其 CommandList
         content = re.sub(r'\[KeySelectUp\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
@@ -1109,7 +1150,7 @@ class KeyConfiguratorGUI:
         self.log("")
         self.log("=" * 60)
         self.log("配置完成！使用说明：")
-        self.log("1. PageUp/PageDown 切换角色，Enter 显示/隐藏UI")
+        self.log("1. ↑ 显示/隐藏UI，←→ 切换角色，↓ 启用/禁用")
         self.log("2. 热键仅在对应角色被选中时生效，实现热键复用")
         self.log("3. 无需修改 d3dx.ini")
         self.log("")
