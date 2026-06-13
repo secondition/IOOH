@@ -1,15 +1,13 @@
-# IOOH — I'm out of hotkeys
+# IOOH — I'm out of hotkeys(endfield)
 
 IOOH 是一个 3DMigoto mod 的小工具，用于解决多角色 mod 之间的按键冲突问题。它能扫描mod目录并生成游戏内 UI 覆盖层，让你在游戏中直观地切换角色和控制 mod 功能。
 
-ui相当简陋，因为我要拉电线去了。
-
-ps：只测试了终末地模组..
+ui比较简陋。。。
 
 ## 功能
 
 - 扫描 mod 目录
-- 为每个 mod 注入本地选择器变量 `$iooh_s<id>`
+- 为每个 mod 注入本地选择器变量
 - 生成游戏内 UI 配置（`IOOHmod.ini`），显示角色列表和按键图标
 - 生成 UI 纹理资源（角色名称标签、按键图标、帮助文本）
 
@@ -29,11 +27,9 @@ ps：只测试了终末地模组..
 | 按键 | 功能 |
 |------|------|
 | PageUP / PageDOWN | 切换角色 |
-| Enter | 显示 / 隐藏 UI |
+| 小键盘0 | 显示 / 隐藏 UI |
+| 小键盘2 | 启用 / 禁用 角色的toggle功能 |
 
-## 自定义角色名称
-
-编辑 `character_name_mapping.json` 添加角色名称映射规则，UI 中将显示友好的角色名称而非 mod 文件夹名。
 
 ## AI 辅助开发说明
 
