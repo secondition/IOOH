@@ -24,7 +24,7 @@ Thumbs.db
 *.log
 efmi_key_config.json
 
-# Generated UI textures
+# Generated UI textures (运行时渲染产物；源素材在 assets/ 下，纳入版本管理)
 resources/
 
 # Reference projects
@@ -40,3 +40,5 @@ dist/
 
 # Python local virtual environments
 .venv/
+*.png
+*.jpg

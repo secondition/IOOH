@@ -62,20 +62,28 @@ void main(
 #ifdef PIXEL_SHADER
 Texture2D<float4> tex : register(t100);
 
+// 双线性过滤采样器：放大纹理时做插值，消除点采样的阶梯锯齿
+SamplerState bilinear : register(s0)
+{
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = CLAMP;
+    AddressV = CLAMP;
+};
+
 void main(vs2ps input, out float4 result : SV_Target0)
 {
     uint width, height;
     tex.GetDimensions(width, height);
-    
+
     // 如果纹理无效，丢弃像素
     if (!width || !height) discard;
-    
+
     // 翻转Y坐标（3dmigoto纹理加载后Y轴需要翻转）
     input.uv.y = 1 - input.uv.y;
-    
-    // 采样纹理
-    result = tex.Load(int3(input.uv.xy * float2(width, height), 0));
-    
+
+    // 双线性采样纹理（归一化 uv），放大时平滑插值
+    result = tex.Sample(bilinear, input.uv.xy);
+
     // 如果alpha接近0，丢弃像素（完全透明）
     if (result.a < 0.01) discard;
 }
