@@ -280,16 +280,17 @@ class KeyConfiguratorGUI:
             self._set_row_key_text(item, binding.key)
             return "break"
 
-        ini_form, disp_form = capture_with_modifiers(event.keycode, event.state)
+        ini_form = capture_with_modifiers(event.keycode, event.state)
         if ini_form is None:
             # 纯修饰键或不支持的主键：继续等待
             return "break"
 
-        binding.key = disp_form
-        self.configurator.set_mod_key_override(binding, ini_form)
+        # 列表显示与 ini 原文一致（不转友好符号）。改键只更新内存 binding，
+        # 注入时写进 ini —— ini 即改键的唯一真实来源，无需另存快照。
+        binding.key = ini_form
         self._row_capture = None
-        self._set_row_key_text(item, disp_form)
-        self.log(f"✎ {binding.section_name} 按键改为 {disp_form}（ini: {ini_form}）— 需点「自动配置」生效")
+        self._set_row_key_text(item, ini_form)
+        self.log(f"✎ {binding.section_name} 按键改为 {ini_form} — 需点「自动配置」生效")
         return "break"
 
     def _set_row_key_text(self, item, text):
@@ -373,17 +374,13 @@ class KeyConfiguratorGUI:
         self._run_pipeline()
 
     def _run_pipeline(self):
-        """完整流程：恢复备份 → 注入选择器 → 生成主 ini → 保存配置 → 生成纹理 → 打印说明。
+        """完整流程：注入选择器 → 生成主 ini → 保存配置 → 生成纹理 → 打印说明。
 
-        注入前先恢复备份回到干净 ini，确保从原始状态注入（改键由内存 binding 承载，
-        注入时写进 ini）。还原职责集中在此，扫描保持只读。
+        注入靠 _strip_local_selector 增量清理上次注入内容（不还原备份），改键由
+        内存 binding.key 承载、注入时写进 ini，故 ini 自身即改键的真实来源、天然跨启动持久。
+        恢复原始 ini 是独立操作（「恢复备份」按钮），不混入注入流程。
         """
         mods = self.configurator.mods
-
-        # 注入前恢复备份回到原始干净 ini
-        if self.configurator.mods_directory:
-            self.log("恢复备份回到干净状态...")
-            self.configurator.restore_backups(self.configurator.mods_directory)
 
         self.log("开始备份并注入选择器上下文...")
         success_count = 0
@@ -432,19 +429,17 @@ class KeyConfiguratorGUI:
             self._scan_mods(quiet=True)
 
     def _restore_backup(self):
-        """恢复所有 mod 的 .backup，完全还原到原始状态（含清空用户改键）。"""
+        """恢复所有 mod 的 .backup，完全还原到原始状态。"""
         directory = self.dir_entry.get()
         if not os.path.exists(directory):
             messagebox.showerror("错误", "目录不存在！")
             return
         self.log("开始恢复备份...")
         self.configurator.restore_backups(directory)
-        # 清空持久化改键：恢复备份 = 完全还原，改键随原始 ini 一起被抹掉
-        self.configurator.clear_mod_key_overrides()
         # 重新扫描刷新列表（静默：恢复备份已自带完成日志）
         if self.configurator.mods_directory:
             self._scan_mods(quiet=True)
-        self.log("✓ 恢复备份完成（已还原原始按键并清空改键）")
+        self.log("✓ 恢复备份完成（已还原原始按键）")
 
     def log(self, message: str):
         """添加日志"""

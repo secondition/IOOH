@@ -23,7 +23,6 @@ Thumbs.db
 # Generated files
 *.log
 xxmi_key_config.json
-iooh_mod_keys.json
 
 # Generated UI textures (运行时渲染产物；源素材在 assets/ 下，纳入版本管理)
 resources/

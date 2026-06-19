@@ -108,9 +108,9 @@ def token_for_keycode(keycode: int):
 
 # ===== mod 列表按键捕获（支持修饰键组合）=====
 # 与 IOOH 菜单键不同：mod 原始热键常带修饰键（Alt+1、Ctrl+/、vk_left），
-# 因此捕获时读取 event.state 的 Alt/Ctrl/Shift 位 + 主键，产出两种形式：
-#   - ini 形式：写入 mod ini 的 key 行值，如 "alt 1"、"ctrl VK_LEFT"、"VK_NUMPAD0"
-#   - 显示形式：列表展示用，如 "Alt+1"、"Ctrl+←"、"小键盘 0"
+# 因此捕获时读取 event.state 的 Alt/Ctrl/Shift 位 + 主键，产出 ini 形式键值
+# （如 "alt 1"、"ctrl VK_LEFT"、"VK_NUMPAD0"），直接写入 ini，列表也按此原文显示
+# （不转友好符号，保持与 ini 一致）。
 # tkinter event.state 修饰键位（Windows）：Shift=0x1, Control=0x4, Alt=0x20000。
 _STATE_SHIFT = 0x0001
 _STATE_CTRL = 0x0004
@@ -121,31 +121,25 @@ _MODIFIER_KEYCODES = {16, 17, 18, 91, 92}  # Shift/Ctrl/Alt/Win
 
 
 def capture_with_modifiers(keycode: int, state: int):
-    """从一次按键事件解析「修饰键 + 主键」组合。
+    """从一次按键事件解析「修饰键 + 主键」组合，返回 ini 形式键值。
 
-    返回 (ini_form, display_form)；主键不可识别或按下的是纯修饰键时返回 (None, None)。
+    主键不可识别或按下的是纯修饰键时返回 None。
     """
     if keycode in _MODIFIER_KEYCODES:
-        return None, None
+        return None
     token = token_for_keycode(keycode)
     if token is None:
-        return None, None
+        return None
 
-    ini_mods = []
-    disp_mods = []
+    mods = []
     if state & _STATE_CTRL:
-        ini_mods.append("ctrl")
-        disp_mods.append("Ctrl")
+        mods.append("ctrl")
     if state & _STATE_ALT:
-        ini_mods.append("alt")
-        disp_mods.append("Alt")
+        mods.append("alt")
     if state & _STATE_SHIFT:
-        ini_mods.append("shift")
-        disp_mods.append("Shift")
+        mods.append("shift")
 
-    ini_form = " ".join(ini_mods + [token])
-    disp_form = "+".join(disp_mods + [key_display(token, "zh")])
-    return ini_form, disp_form
+    return " ".join(mods + [token])
 
 
 

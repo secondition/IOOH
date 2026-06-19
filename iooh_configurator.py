@@ -35,69 +35,6 @@ class EFMIKeyConfigurator:
         self.config_file = os.path.join(self._get_output_dir(), "xxmi_key_config.json")
         # IOOH 菜单四个控制键的单一数据源（持久化在 exe/脚本同级）
         self.iooh_keys = IOOHKeyConfig(self._get_output_dir())
-        # mod 列表按键覆盖：{ini_file: {section: ini形式键值}}，持久化在 exe/脚本同级。
-        # 扫描会还原 ini 到原始（改键被冲掉），故改键存这里，解析后再套回内存 binding、
-        # 注入时写进 ini，UI 列表始终显示这里的改键值。恢复备份时清空。
-        self.mod_keys_file = os.path.join(self._get_output_dir(), "iooh_mod_keys.json")
-        self.mod_key_overrides: Dict[str, Dict[str, str]] = {}
-        self._load_mod_key_overrides()
-
-    def _load_mod_key_overrides(self):
-        """读取 mod 按键覆盖表（缺失/损坏则为空）。"""
-        if not os.path.exists(self.mod_keys_file):
-            return
-        try:
-            with open(self.mod_keys_file, 'r', encoding='utf-8') as f:
-                self.mod_key_overrides = json.load(f)
-        except Exception as e:
-            print(f"读取 mod 按键覆盖失败，忽略: {e}")
-            self.mod_key_overrides = {}
-
-    def _save_mod_key_overrides(self) -> bool:
-        """保存 mod 按键覆盖表到磁盘。"""
-        try:
-            with open(self.mod_keys_file, 'w', encoding='utf-8') as f:
-                json.dump(self.mod_key_overrides, f, ensure_ascii=False, indent=2)
-            return True
-        except Exception as e:
-            print(f"保存 mod 按键覆盖失败: {e}")
-            return False
-
-    def set_mod_key_override(self, binding: ModKeyBinding, ini_form: str):
-        """记录某绑定的按键覆盖（ini 形式），写回内存与磁盘并更新该 binding。"""
-        self.mod_key_overrides.setdefault(binding.ini_file, {})[binding.section_name] = ini_form
-        binding.key_override = ini_form
-        self._save_mod_key_overrides()
-
-    def clear_mod_key_overrides(self):
-        """清空所有 mod 按键覆盖（恢复备份时调用，改键随原始 ini 一起还原）。"""
-        self.mod_key_overrides = {}
-        self._save_mod_key_overrides()
-
-    def _apply_mod_key_overrides(self):
-        """扫描解析后，把覆盖表套到对应 binding 上（按 ini_file + section 匹配）。
-
-        binding.key 是 UI 列表显示值；有覆盖时改成覆盖键的显示形式，让列表反映改键。
-        """
-        for mod in self.mods:
-            for binding in mod.key_bindings:
-                section_map = self.mod_key_overrides.get(binding.ini_file, {})
-                override = section_map.get(binding.section_name, "")
-                if override:
-                    binding.key_override = override
-                    binding.key = self._ini_key_to_display(override)
-
-    @staticmethod
-    def _ini_key_to_display(ini_form: str) -> str:
-        """把 ini 形式键值（如 'ctrl VK_LEFT'、'alt 1'）转成列表显示形式（'Ctrl+←'）。"""
-        from iooh_keys import key_display
-        mod_map = {"ctrl": "Ctrl", "alt": "Alt", "shift": "Shift"}
-        parts = [p for p in ini_form.split() if p]
-        if not parts:
-            return ini_form
-        mods = [mod_map[p.lower()] for p in parts[:-1] if p.lower() in mod_map]
-        main = parts[-1]
-        return "+".join(mods + [key_display(main, "zh")])
 
     @staticmethod
     def _get_bundle_dir() -> str:
@@ -305,9 +242,6 @@ class EFMIKeyConfigurator:
         for idx, mod in enumerate(self.mods):
             mod.character_id = idx
 
-        # 套用持久化的 mod 改键到内存 binding（ini 已被还原为原始，改键从持久化文件取）
-        self._apply_mod_key_overrides()
-
         return self.mods
 
     def _iter_sections(self, content: str):
@@ -376,7 +310,11 @@ class EFMIKeyConfigurator:
             print(f"解析 {mod.name}/{ini_filename} 失败: {e}")
 
     def _extract_key_from_section(self, section_content: str):
-        """Extract a display-friendly key string (e.g., Alt+1)."""
+        """Extract the raw ini key value (e.g. 'alt 1'、'vk_up'、'ctrl /')。
+
+        直接返回 ini 原文（去行内注释、压缩空白），与列表改键显示风格统一、
+        与 ini 实际内容一致，不转 Alt+1 这类友好格式。
+        """
         key_lines = re.findall(
             r'^\s*key\s*=\s*(.+)$',
             section_content,
@@ -394,57 +332,14 @@ class EFMIKeyConfigurator:
         if not key_lines:
             return None
 
-        skip_tokens = {
-            'no_modifiers',
-            'any_modifiers',
-            'allow_modifiers',
-            'no_ctrl',
-            'no_alt',
-            'no_shift',
-            'no_lctrl',
-            'no_rctrl',
-            'no_lalt',
-            'no_ralt',
-            'no_lshift',
-            'no_rshift',
-        }
-        modifier_map = {
-            'ctrl': 'Ctrl',
-            'lctrl': 'LCtrl',
-            'rctrl': 'RCtrl',
-            'shift': 'Shift',
-            'lshift': 'LShift',
-            'rshift': 'RShift',
-            'alt': 'Alt',
-            'lalt': 'LAlt',
-            'ralt': 'RAlt',
-        }
-
         for line in key_lines:
-            cleaned_line = line.split(';', 1)[0].strip()
-            tokens = [p for p in re.split(r'[\s,]+', cleaned_line) if p]
-            if not tokens:
-                continue
+            # 去行内注释，压缩连续空白为单空格
+            cleaned = re.sub(r'\s+', ' ', line.split(';', 1)[0].strip())
+            if cleaned:
+                return cleaned
 
-            mods = []
-            main_keys = []
-            for token in tokens:
-                lowered = token.lower()
-                if lowered in skip_tokens:
-                    continue
-                if lowered in modifier_map:
-                    mods.append(modifier_map[lowered])
-                    continue
-                main_keys.append(token)
+        return None
 
-            if not main_keys:
-                continue
-
-            if mods:
-                return "+".join(mods + [main_keys[0]])
-            return main_keys[0]
-
-        return key_lines[0].strip()
 
     def _extract_variable_from_section(self, section_content: str):
         """从section内容中提取变量名"""
@@ -886,7 +781,7 @@ endif
                                 mod.character_id,
                                 local_var,
                                 enable_var,
-                                binding_map[section_name].key_override,
+                                binding_map[section_name].key,
                             )
                             new_parts.append(new_section)
                         else:
@@ -916,13 +811,14 @@ endif
             traceback.print_exc()
             return False
 
-    def _modify_key_section_with_context(self, section_content: str, character_id: int, local_var: str, enable_var: str, key_override: str = "") -> str:
+    def _modify_key_section_with_context(self, section_content: str, character_id: int, local_var: str, enable_var: str, key_value: str = "") -> str:
         """Modify one key section, inject enable condition without changing the key.
 
         门控条件用启用标志 ${enable_var} == 1：角色被 VK_DOWN 启用后键才生效，
         切换聚焦不影响已启用角色的键继续工作。
 
-        key_override 非空时，把该 section 的 key 行重写为覆盖值（用户在 UI 改键）。
+        key_value 非空时，把该 section 的 key 行重写为该值（承载 UI 改键，
+        也是改键落盘到 ini 的唯一途径——ini 自身即改键的真实来源）。
         """
         section_content = self._normalize_section_text(section_content)
         lines = section_content.split('\n')
@@ -934,14 +830,14 @@ endif
             line = lines[index]
             stripped = line.strip()
 
-            # 用户改键：重写 key 行（保留缩进与行内注释）
-            if key_override and re.match(r'(?i)^key\s*=', stripped):
+            # 重写 key 行为 key_value（保留缩进与行内注释）
+            if key_value and re.match(r'(?i)^key\s*=', stripped):
                 indent = line[:len(line) - len(line.lstrip())]
                 comment = ''
                 value_part = line.split('=', 1)[1]
                 if ';' in value_part:
                     comment = ' ;' + value_part.split(';', 1)[1]
-                modified_lines.append(f'{indent}key = {key_override}{comment}')
+                modified_lines.append(f'{indent}key = {key_value}{comment}')
                 index += 1
                 continue
 
@@ -1016,9 +912,13 @@ endif
         content = re.sub(r'\[CommandListSelectUp\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
         content = re.sub(r'\[CommandListSelectDown\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
 
-        # 移除新版本地选择器 Key 和 CommandList sections（SelectUp/Down + ToggleUI + ToggleVisible）
-        content = re.sub(r'\[Key_iooh_s\d+_(?:Select(?:Up|Down)|ToggleUI|ToggleVisible)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
-        content = re.sub(r'\[CommandList_iooh_s\d+_(?:Select(?:Up|Down)|ToggleUI|ToggleVisible)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+        # 移除新版本地选择器：起止标记之间整块删除（标记、夹缝注释、全部 Key/CommandList
+        # section 一次清掉）。起止标记由注入时同一字符串原子写入，不会只剩半边；
+        # 按块删可避免夹在标记与首个 section 之间的说明注释逐次累积。
+        content = re.sub(
+            r';\s*=====\s*IOOH 本地选择器\s*=====[\s\S]*?;\s*=====\s*IOOH 本地选择器结束\s*=====\s*\n?',
+            '', content, flags=re.MULTILINE,
+        )
 
         # 移除旧的 IOOH CommandList sections（上次脚本生成的）
         content = re.sub(r'\[CommandList_IOOH_\w+\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
@@ -1026,8 +926,6 @@ endif
         # 移除标记块
         content = re.sub(r';\s*=====\s*角色选择器控制.*?;\s*=====\s*选择器控制结束\s*=====?\n?', '', content, flags=re.MULTILINE | re.DOTALL)
         content = re.sub(r';\s*=====\s*IOOH 角色选择器 CommandList\s*=====\s*\n?', '', content, flags=re.MULTILINE)
-        content = re.sub(r';\s*=====\s*IOOH 本地选择器\s*=====\s*\n?', '', content, flags=re.MULTILINE)
-        content = re.sub(r';\s*=====\s*IOOH 本地选择器结束\s*=====\s*\n?', '', content, flags=re.MULTILINE)
 
         # 移除测试用的本地选择变量（如 $perlica_sel）和相关sections
         content = re.sub(r'^;.*测试用.*\n', '', content, flags=re.MULTILINE)

@@ -14,9 +14,6 @@ class ModKeyBinding:
         self.mod_path = mod_path
         self.ini_file = ini_file  # 该绑定所属的 ini 文件（解析时记录，分组时直接使用）
         self.description = ""
-        # 用户在 UI 改键后的 ini 形式覆盖值（如 "alt 1"、"ctrl VK_LEFT"）。
-        # 为空表示沿用原始键；注入时若非空则重写该 section 的 key 行。
-        self.key_override = ""
 
 
 class ModInfo:
