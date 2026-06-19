@@ -15,8 +15,7 @@ GUI_TRANSLATIONS = {
     "title": {"zh": "EFMI IOOH v1.4", "en": "EFMI IOOH v1.4"},
     "mod_dir": {"zh": "Mods目录:", "en": "Mods Directory:"},
     "browse": {"zh": "打开文件夹", "en": "open folder"},
-    "config": {"zh": "自动配置", "en": "Auto Config"},
-    "save": {"zh": "保存", "en": "Save"},
+    "config": {"zh": "自动配置并保存", "en": "Auto Config & Save"},
     "restore": {"zh": "恢复备份", "en": "Restore Backup"},
     "lang_btn": {"zh": "🌐 English", "en": "🌐 中文"},
     "col_mod_name": {"zh": "Mod名称", "en": "Mod Name"},
@@ -96,7 +95,6 @@ class KeyConfiguratorGUI:
         self.lbl_mod_dir.config(text=self._tr("mod_dir"))
         self.btn_browse.config(text=self._tr("browse"))
         self.btn_config.config(text=self._tr("config"))
-        self.btn_save.config(text=self._tr("save"))
         self.btn_restore.config(text=self._tr("restore"))
         self.btn_lang.config(text=self._tr("lang_btn"))
 
@@ -150,8 +148,6 @@ class KeyConfiguratorGUI:
         self.btn_browse.pack(side=tk.LEFT, padx=2)
         self.btn_config = ttk.Button(toolbar, command=self._auto_config)
         self.btn_config.pack(side=tk.LEFT, padx=2)
-        self.btn_save = ttk.Button(toolbar, command=self._save_config)
-        self.btn_save.pack(side=tk.LEFT, padx=2)
         self.btn_restore = ttk.Button(toolbar, command=self._restore_backup)
         self.btn_restore.pack(side=tk.LEFT, padx=2)
 
@@ -290,7 +286,7 @@ class KeyConfiguratorGUI:
         binding.key = ini_form
         self._row_capture = None
         self._set_row_key_text(item, ini_form)
-        self.log(f"✎ {binding.section_name} 按键改为 {ini_form} — 需点「自动配置」生效")
+        self.log(f"✎ {binding.section_name} 按键改为 {ini_form} — 需点「自动配置并保存」生效")
         return "break"
 
     def _set_row_key_text(self, item, text):
@@ -341,7 +337,7 @@ class KeyConfiguratorGUI:
             total_bindings = sum(len(m.key_bindings) for m in mods)
             total_ini_files = sum(len(m.ini_files) for m in mods)
             self.log(f"列表已更新，共 {total_ini_files} 个ini文件，{total_bindings} 个按键绑定")
-            self.log("提示：双击「按键」列可改键；改完点「自动配置」生效。")
+            self.log("提示：双击「按键」列可改键；改完点「自动配置并保存」生效。")
 
     def _populate_tree(self, mods):
         """清空并重建列表，记录每行对应的 binding 以支持改键。"""
@@ -360,14 +356,7 @@ class KeyConfiguratorGUI:
                 self._tree_bindings[item] = binding
 
     def _auto_config(self):
-        """自动配置：走完整流程（流程内已含恢复备份）。"""
-        if not self.configurator.mods:
-            messagebox.showwarning("提示", "请先扫描 Mods 目录")
-            return
-        self._run_pipeline()
-
-    def _save_config(self):
-        """保存：走完整流程（先恢复备份回干净状态，再注入 + 生成 ini + 生成纹理）。"""
+        """自动配置：增量清理旧注入 → 注入选择器 → 生成主 ini/配置/纹理。"""
         if not self.configurator.mods:
             messagebox.showwarning("提示", "请先扫描 Mods 目录")
             return

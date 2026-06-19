@@ -314,30 +314,30 @@ class EFMIKeyConfigurator:
 
         直接返回 ini 原文（去行内注释、压缩空白），与列表改键显示风格统一、
         与 ini 实际内容一致，不转 Alt+1 这类友好格式。
+
+        先把字段规整到各自行（处理多字段同行的写法），再按行提取 key 值。
+        key = 后为空时，键值可能续行到下一行（部分 mod 这样写）：仅当下一行不是
+        字段赋值（A = B / $var = ...）且非 section 头时才当作续行键值；若下一行是
+        type = cycle 这类字段赋值，说明 key 本就为空，返回 None。判别口径与
+        _modify_key_section_with_context 处理 condition 空值续行保持一致。
         """
-        key_lines = re.findall(
-            r'^\s*key\s*=\s*(.+)$',
-            section_content,
-            flags=re.MULTILINE | re.IGNORECASE
-        )
-        if not key_lines:
-            # Fallback: key and other fields are on the same line
-            key_match = re.search(
-                r'(?i)\bkey\s*=\s*(.*?)(?=\s+[A-Za-z_][A-Za-z0-9_]*\s*=|\s+\$\w+\s*=|\s+\[|$)',
-                section_content,
-                flags=re.DOTALL,
-            )
-            if key_match:
-                key_lines = [key_match.group(1)]
-        if not key_lines:
-            return None
-
-        for line in key_lines:
-            # 去行内注释，压缩连续空白为单空格
-            cleaned = re.sub(r'\s+', ' ', line.split(';', 1)[0].strip())
-            if cleaned:
-                return cleaned
-
+        normalized = self._normalize_section_text(section_content)
+        lines = normalized.split('\n')
+        for idx, line in enumerate(lines):
+            match = re.match(r'(?i)^[ \t]*key[ \t]*=[ \t]*(.*)$', line)
+            if not match:
+                continue
+            value = match.group(1).split(';', 1)[0].strip()
+            if not value and idx + 1 < len(lines):
+                next_line = lines[idx + 1]
+                next_stripped = next_line.split(';', 1)[0].strip()
+                is_field_line = re.match(
+                    r'(?i)^\s*(?:[A-Za-z_]\w*|\$[A-Za-z_]\w*)\s*=(?!=)',
+                    next_line,
+                )
+                if next_stripped and not next_stripped.startswith('[') and not is_field_line:
+                    value = next_stripped
+            return re.sub(r'\s+', ' ', value) or None
         return None
 
 
