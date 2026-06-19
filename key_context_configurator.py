@@ -25,11 +25,12 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 
 class ModKeyBinding:
     """mod按键绑定信息"""
-    def __init__(self, section_name: str, key: str, variable: str, mod_path: str):
+    def __init__(self, section_name: str, key: str, variable: str, mod_path: str, ini_file: str = ""):
         self.section_name = section_name
         self.key = key
         self.variable = variable
         self.mod_path = mod_path
+        self.ini_file = ini_file  # 该绑定所属的 ini 文件（解析时记录，分组时直接使用）
         self.description = ""
 
 
@@ -313,8 +314,8 @@ class EFMIKeyConfigurator:
                 variable = self._extract_variable_from_section(section_content)
                 binding_type = self._extract_type_from_section(section_content)
                 
-                # 处理所有包含 key = 的热键绑定
-                binding = ModKeyBinding(section_name, key, variable or f"${section_name}", mod.path)
+                # 处理所有包含 key = 的热键绑定（记录来源 ini，避免跨文件同名 section 归错组）
+                binding = ModKeyBinding(section_name, key, variable or f"${section_name}", mod.path, ini_file_path)
                 binding.description = self._generate_description(section_name, variable, binding_type)
                 mod.key_bindings.append(binding)
                     
@@ -762,47 +763,39 @@ if ${ui_var} == 1
 endif
 ; ===== IOOH 本地选择器结束 ====="""
 
-            # 按ini文件分组处理按键绑定
+            # 按来源 ini 分组（解析时已记录 binding.ini_file），
+            # 直接归组而非靠 section 名反查文件——后者在跨 ini 同名 section 时会把
+            # 所有同名绑定都归到第一个匹配文件，导致其余文件漏注入。
             bindings_by_file: Dict[str, List[ModKeyBinding]] = {}
             for binding in mod.key_bindings:
-                for ini_file in mod.ini_files:
-                    try:
-                        with open(ini_file, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                        if f'[{binding.section_name}]' in content:
-                            if ini_file not in bindings_by_file:
-                                bindings_by_file[ini_file] = []
-                            bindings_by_file[ini_file].append(binding)
-                            break
-                    except:
-                        continue
+                bindings_by_file.setdefault(binding.ini_file, []).append(binding)
 
-            # 选定宿主 ini：选择器块（NUMPAD0/2/PageUp/PageDown 处理器）只注入这一处，
-            # 避免同 mod 多个 ini 各有一份 ToggleUI 同时监听 NUMPAD2、把 $iooh_en
-            # 翻转多次而相互抵消。global 变量声明则每个 ini 都注入（见下方循环），
-            # 因为 3DMigoto 按各 ini namespace 解析变量，同名 global 会合并为一份共享存储。
-            host_ini = None
-            for ini_file in bindings_by_file:
-                with open(ini_file, 'r', encoding='utf-8') as f:
-                    if re.search(r'\[Constants\]\s*\n', f.read()):
-                        host_ini = ini_file
-                        break
-            if host_ini is None and bindings_by_file:
-                host_ini = next(iter(bindings_by_file))
-
-            # 修改每个ini文件
-            for ini_file, bindings in bindings_by_file.items():
+            # 每个含按键的 ini 都是自洽单元：自带 [Constants] 变量声明 + 完整选择器块
+            # （NUMPAD0/2/PageUp/PageDown 处理器）。
+            # 不依赖跨 ini 共享变量——3DMigoto 的 Key condition 只能可靠引用同文件变量，
+            # `global` 并不会按同名跨 ini 合并成一份共享存储（实测：只在宿主 ini 注入处理器时，
+            # 仅宿主 ini 生效，其余只声明+引用 $iooh_en 的文件因自己那份永远为 0 而失效）。
+            # 因此沿用与「跨 mod 巧合同步」一致的方案：每个文件各持一份 $iooh_s/$iooh_en/$iooh_ui，
+            # 各自监听同一物理键、做相同计数，天然保持数值同步；多份 NUMPAD2 处理器分别翻转
+            # 各自文件的 $iooh_en（互不共享，不会相互抵消）。
+            # 无按键绑定的 ini 不引用任何 iooh 变量，无需注入（仅清理旧注入）。
+            for ini_file in mod.ini_files:
                 with open(ini_file, 'r', encoding='utf-8') as f:
                     content = f.read()
 
                 # 清理旧的IOOH注入内容
                 content = self._strip_local_selector(content)
 
-                is_host = (ini_file == host_ini)
+                bindings = bindings_by_file.get(ini_file, [])
 
-                # 每个含门控键的 ini 都要在自己的 [Constants] 声明这些 global：
-                # 3DMigoto 变量按各 ini 的 namespace 解析，未声明则本文件 condition 引用不到；
-                # 而同名 global 在多个 ini 声明时会合并为同一份共享存储，因此每处声明都安全且必要。
+                # 无按键绑定：写回清理后的内容即可，不注入变量与选择器块。
+                if not bindings:
+                    self._ensure_writable(ini_file)
+                    with open(ini_file, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    continue
+
+                # 在本 ini 的 [Constants] 声明这些变量（无则新建 [Constants]）：
                 # $iooh_s<id>：聚焦角色（初始 0，让 PageUp/PageDown 立即可循环切换）
                 # $iooh_en<id>：启用标志（初始 0，NUMPAD2 对当前聚焦角色翻转）
                 # $iooh_ui<id>：菜单显隐镜像（初始 0，NUMPAD0 与菜单侧 $show_character_ui 巧合同步；
@@ -815,7 +808,7 @@ endif
                 else:
                     content = f'[Constants]\n{decls}\n' + content
 
-                # 修改每个按键绑定的Key section（所有 ini 都补 condition 门控）
+                # 给本 ini 内的按键 section 补 condition 门控
                 binding_map = {b.section_name: b for b in bindings}
                 sections = list(self._iter_sections(content))
                 if sections:
@@ -837,15 +830,14 @@ endif
                     new_parts.append(content[last_idx:])
                     content = ''.join(new_parts)
 
-                # 仅宿主 ini 注入选择器块（处理器只能存在一份）
-                if is_host:
-                    first_key_match = re.search(r'\[Key\w+\]', content)
-                    if first_key_match:
-                        insert_pos = first_key_match.start()
-                        content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
-                    else:
-                        # 没有Key section，追加到文件末尾
-                        content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
+                # 注入完整选择器块：每个含按键的 ini 各注入一份，互不共享、靠相同计数巧合同步
+                first_key_match = re.search(r'\[Key\w+\]', content)
+                if first_key_match:
+                    insert_pos = first_key_match.start()
+                    content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
+                else:
+                    # 没有Key section，追加到文件末尾
+                    content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
 
                 self._ensure_writable(ini_file)
                 with open(ini_file, 'w', encoding='utf-8') as f:
