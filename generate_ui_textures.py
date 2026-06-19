@@ -7,8 +7,9 @@ muban 等大的透明画布上，分别生成两类叠加层，供 ini 以相同
 依次叠加渲染：
 
   1. character_<id>_avatar.png —— 角色头像层
-     在模板「白框」位置渲染角色头像（resources/avatars/<角色名>.png）；
+     在模板「白框」位置渲染角色头像（exe 同级 rolepicture/<角色名>.png）；
      若该角色没有头像文件，则在同一位置渲染问号。
+     头像与映射均不随包分发，由用户自行放置/编辑。
   2. character_<id>_text.png —— 角色文字层
      在模板白框右侧位置渲染角色名（透明底文字图像）。
 
@@ -22,6 +23,27 @@ import json
 import shutil
 import sys
 from typing import List, Tuple
+
+
+# 用户自定义资源目录名（位于 exe/脚本同级，不随包分发）
+ROLEPICTURE_DIRNAME = "rolepicture"
+# 角色名称映射文件名（位于 exe/脚本同级，不随包分发）
+MAPPING_FILENAME = "character_name_mapping.json"
+
+# 首次运行时写出的默认映射模板（不打包，用户可自行编辑增删）
+DEFAULT_MAPPING = {
+    "version": "1.3",
+    "description": "角色名称映射字典 - 用于游戏内UI显示",
+    "match_rules": [
+        {"keywords": ["example", "例子"], "display_name": "只是个例子", "display_en_name": "An example"},
+    ],
+    "notes": [
+        "匹配规则：不区分大小写，包含任一关键词即匹配",
+        "未匹配的mod将显示原始mod名称",
+        "可自行添加新的角色映射规则",
+        "头像图片放在同级 rolepicture 文件夹，按角色名命名，如 laevatain.png",
+    ],
+}
 
 
 class UITextureGenerator:
@@ -68,10 +90,13 @@ class UITextureGenerator:
         self.base_output_dir = base_output_dir or self._get_output_dir()
         # 输出：游戏渲染资源写在 exe/脚本旁的 resources/textures
         self.output_dir = os.path.join(self.base_output_dir, "resources", "textures")
-        # 源素材：随包分发的 assets（头像 + muban 模板），只读
+        # 源素材：muban 模板随包分发（只读）
         self.assets_dir = self._get_assets_dir()
-        self.avatar_dir = os.path.join(self.assets_dir, "avatars")
         self.muban_src = os.path.join(self.assets_dir, self.MUBAN_FILENAME)
+        # 用户自定义资源（不随包分发，位于 exe/脚本同级）：
+        # 头像目录 rolepicture/，角色名称映射 character_name_mapping.json
+        self.avatar_dir = os.path.join(self.base_output_dir, ROLEPICTURE_DIRNAME)
+        self.mapping_path = os.path.join(self.base_output_dir, MAPPING_FILENAME)
         # muban 运行时副本：复制到输出目录供游戏渲染加载
         self.muban_path = os.path.join(self.output_dir, self.MUBAN_FILENAME)
 
@@ -84,16 +109,28 @@ class UITextureGenerator:
 
     @staticmethod
     def _get_assets_dir() -> str:
-        """Return the directory containing bundled source assets (avatars + muban)."""
+        """Return the directory containing bundled source assets (muban template)."""
         if getattr(sys, 'frozen', False):
             base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
         else:
             base = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(base, "assets")
 
+    def ensure_user_assets(self):
+        """确保用户自定义资源就位（不随包分发）：
+        - 创建 rolepicture/ 头像目录（用户自行往里放图片）
+        - 若同级 mapping.json 缺失，则写出默认模板供用户编辑
+        """
+        os.makedirs(self.avatar_dir, exist_ok=True)
+        if not os.path.exists(self.mapping_path):
+            with open(self.mapping_path, 'w', encoding='utf-8') as f:
+                json.dump(DEFAULT_MAPPING, f, ensure_ascii=False, indent=2)
+            print(f"已生成默认映射模板: {self.mapping_path}")
+
     def setup_directories(self):
-        """创建输出目录，并把 muban 模板从源素材复制到输出供游戏渲染"""
+        """创建输出目录，确保用户资源就位，并把 muban 模板复制到输出供游戏渲染"""
         os.makedirs(self.output_dir, exist_ok=True)
+        self.ensure_user_assets()
         if not os.path.exists(self.muban_src):
             raise FileNotFoundError(f"缺少源模板文件: {self.muban_src}")
         shutil.copy2(self.muban_src, self.muban_path)
@@ -133,7 +170,7 @@ class UITextureGenerator:
         return int(l * w), int(t * h), int(r * w), int(b * h)
 
     def _find_avatar(self, keywords: List[str]) -> str:
-        """按关键词列表在 avatars 目录查找头像文件（不区分大小写）。
+        """按关键词列表在 rolepicture 目录查找头像文件（不区分大小写）。
         关键词含英文名/中文名，与文件名（去扩展名）相等即匹配。"""
         if not os.path.isdir(self.avatar_dir):
             return ""
@@ -317,10 +354,10 @@ class UITextureGenerator:
             tuple: (characters, mods_data)
             characters 为列表，每项 dict:
               {"display": 中文显示名, "display_en": 英文显示名, "keywords": 匹配关键词列表}
-            keywords 用于在 avatars 目录按文件名匹配头像（含英文名）。
+            keywords 用于在 rolepicture 目录按文件名匹配头像（含英文名）。
         """
         key_config_path = os.path.join(self.base_output_dir, 'efmi_key_config.json')
-        mapping_path = os.path.join(self.assets_dir, 'character_name_mapping.json')
+        mapping_path = self.mapping_path
 
         # 1. 读取key配置，获取实际的mod列表
         with open(key_config_path, 'r', encoding='utf-8') as f:

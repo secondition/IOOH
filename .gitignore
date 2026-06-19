@@ -42,3 +42,11 @@ dist/
 .venv/
 *.png
 *.jpg
+problem.ini
+
+# 用户自定义资源（不打包、不入库）：头像目录与角色映射，运行时自动创建
+rolepicture/
+/character_name_mapping.json
+
+# muban 模板需随包分发，强制纳入版本管理（覆盖上面的 *.png）
+!assets/muban.png

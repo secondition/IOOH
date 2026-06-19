@@ -43,7 +43,6 @@ class ModInfo:
         self.key_bindings: List[ModKeyBinding] = []
         self.has_backup = False
         self.ini_file_backups: Dict[str, bool] = {}
-        self.has_character_detection = False  # 是否已有角色检测变量
 
 
 class EFMIKeyConfigurator:
@@ -84,7 +83,7 @@ class EFMIKeyConfigurator:
         """Copy bundled runtime assets (shaders + muban 模板) next to the executable."""
         self._copy_bundled_tree("shaders")
         # muban 模板源在 assets/，复制到运行时渲染目录 resources/textures/
-        # （用户头像同在 assets/avatars，由纹理生成器按需读取，不在此复制）
+        # （用户头像在 exe 同级 rolepicture/，由纹理生成器按需读取，不在此复制）
         src = os.path.join(self._get_bundle_dir(), "assets", "muban.png")
         dst = os.path.join(self._resolve_output_dir(), "resources", "textures", "muban.png")
         if os.path.isfile(src) and os.path.normcase(os.path.abspath(src)) != os.path.normcase(os.path.abspath(dst)):
@@ -179,7 +178,6 @@ class EFMIKeyConfigurator:
                         }
                         for kb in mod.key_bindings
                     ],
-                    "has_character_detection": mod.has_character_detection,
                 }
                 for mod in self.mods
             ]
@@ -249,10 +247,7 @@ class EFMIKeyConfigurator:
                     # 解析所有ini文件
                     for ini_file in ini_files:
                         self._parse_ini_file(mod, ini_file)
-                        # 检查是否已有角色检测变量
-                        if self._check_has_character_detection(ini_file):
-                            mod.has_character_detection = True
-                    
+
                     # 只添加有按键绑定的mod
                     if mod.key_bindings:
                         self.mods.append(mod)
@@ -265,27 +260,6 @@ class EFMIKeyConfigurator:
             mod.character_id = idx
             
         return self.mods
-    
-    def _check_has_character_detection(self, ini_file: str) -> bool:
-        """检查ini文件是否已有角色检测变量（如$active, $object_detected等）"""
-        try:
-            with open(ini_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # 查找常见的角色检测变量
-            detection_patterns = [
-                r'\$active\d*\s*=\s*[01]',
-                r'\$object_detected\s*=\s*[01]',
-                r'\$mod_enabled\s*=\s*[01]'
-            ]
-            
-            for pattern in detection_patterns:
-                if re.search(pattern, content):
-                    return True
-            return False
-            
-        except Exception:
-            return False
 
     def _iter_sections(self, content: str):
         """迭代所有 section（更稳健，支持没有换行的 section 间隔）。"""
@@ -568,13 +542,9 @@ run = CommandList_PrevChar
 
 [CommandList_PrevChar]
 """
-        # 生成上一个角色循环逻辑，-1不在条件中所以自动跳过
-        for i in range(total_chars):
-            keyword = "if" if i == 0 else "elif"
-            prev_val = (i - 1) % total_chars
-            content += f"{keyword} $iooh_sel == {i}\n    $iooh_sel = {prev_val}\n"
+        # 上一个角色：自减并回绕（O(1)，不随角色数膨胀）
         if total_chars > 0:
-            content += "endif\n"
+            content += f"$iooh_sel = $iooh_sel - 1\nif $iooh_sel < 0\n    $iooh_sel = {max_id}\nendif\n"
 
         content += """
 ; PageDown: 下一个角色（仅菜单显示时响应，隐藏时保留当前选择）
@@ -585,12 +555,9 @@ run = CommandList_NextChar
 
 [CommandList_NextChar]
 """
-        for i in range(total_chars):
-            keyword = "if" if i == 0 else "elif"
-            next_val = (i + 1) % total_chars
-            content += f"{keyword} $iooh_sel == {i}\n    $iooh_sel = {next_val}\n"
+        # 下一个角色：自增并回绕（O(1)，不随角色数膨胀）
         if total_chars > 0:
-            content += "endif\n"
+            content += f"$iooh_sel = $iooh_sel + 1\nif $iooh_sel > {max_id}\n    $iooh_sel = 0\nendif\n"
 
         content += """
 ; NUMPAD2: 启用/禁用当前聚焦的角色（翻转该 id 对应的 $iooh_en<id>，仅菜单显示时响应）
@@ -723,30 +690,33 @@ filename = resources\\textures\\character_{mod.character_id}_text.png
                 self.backup_mod(mod)
 
             total_chars = len(self.mods)
+            max_id = total_chars - 1 if total_chars > 0 else 0
             local_var = f'iooh_s{mod.character_id}'
             enable_var = f'iooh_en{mod.character_id}'
             ui_var = f'iooh_ui{mod.character_id}'
 
-            # 生成上下键 CommandList 循环逻辑
-            cmd_up_lines = []
-            cmd_down_lines = []
-            for i in range(total_chars):
-                keyword = "if" if i == 0 else "elif"
-                next_up = (i - 1) % total_chars
-                next_down = (i + 1) % total_chars
-                cmd_up_lines.append(f'{keyword} ${local_var} == {i}\n    ${local_var} = {next_up}')
-                cmd_down_lines.append(f'{keyword} ${local_var} == {i}\n    ${local_var} = {next_down}')
+            # 上下键循环：自减/自增 + 回绕（O(1)，不随角色数膨胀）。
+            # 仅菜单可见（$iooh_ui<id> == 1）时才执行切换。
             if total_chars > 0:
-                cmd_up_lines.append('endif')
-                cmd_down_lines.append('endif')
-
-            # 门控：仅菜单可见（$iooh_ui<id> == 1）时才执行切换/启用，逐行缩进包进 if
-            def _gate(lines):
-                body = '\n'.join('    ' + ln for ln in '\n'.join(lines).split('\n'))
-                return f'if ${ui_var} == 1\n{body}\nendif'
-
-            cmd_up_block = _gate(cmd_up_lines) if total_chars > 0 else ''
-            cmd_down_block = _gate(cmd_down_lines) if total_chars > 0 else ''
+                cmd_up_block = (
+                    f'if ${ui_var} == 1\n'
+                    f'    ${local_var} = ${local_var} - 1\n'
+                    f'    if ${local_var} < 0\n'
+                    f'        ${local_var} = {max_id}\n'
+                    f'    endif\n'
+                    f'endif'
+                )
+                cmd_down_block = (
+                    f'if ${ui_var} == 1\n'
+                    f'    ${local_var} = ${local_var} + 1\n'
+                    f'    if ${local_var} > {max_id}\n'
+                    f'        ${local_var} = 0\n'
+                    f'    endif\n'
+                    f'endif'
+                )
+            else:
+                cmd_up_block = ''
+                cmd_down_block = ''
 
             selector_block = f"""; ===== IOOH 本地选择器 =====
 ; NUMPAD0: 菜单显隐镜像（仅同步本地门控变量，不负责实际显示；
@@ -807,6 +777,19 @@ endif
                     except:
                         continue
 
+            # 选定宿主 ini：选择器块（NUMPAD0/2/PageUp/PageDown 处理器）只注入这一处，
+            # 避免同 mod 多个 ini 各有一份 ToggleUI 同时监听 NUMPAD2、把 $iooh_en
+            # 翻转多次而相互抵消。global 变量声明则每个 ini 都注入（见下方循环），
+            # 因为 3DMigoto 按各 ini namespace 解析变量，同名 global 会合并为一份共享存储。
+            host_ini = None
+            for ini_file in bindings_by_file:
+                with open(ini_file, 'r', encoding='utf-8') as f:
+                    if re.search(r'\[Constants\]\s*\n', f.read()):
+                        host_ini = ini_file
+                        break
+            if host_ini is None and bindings_by_file:
+                host_ini = next(iter(bindings_by_file))
+
             # 修改每个ini文件
             for ini_file, bindings in bindings_by_file.items():
                 with open(ini_file, 'r', encoding='utf-8') as f:
@@ -815,17 +798,24 @@ endif
                 # 清理旧的IOOH注入内容
                 content = self._strip_local_selector(content)
 
-                # 注入本地选择器变量到 [Constants] section
+                is_host = (ini_file == host_ini)
+
+                # 每个含门控键的 ini 都要在自己的 [Constants] 声明这些 global：
+                # 3DMigoto 变量按各 ini 的 namespace 解析，未声明则本文件 condition 引用不到；
+                # 而同名 global 在多个 ini 声明时会合并为同一份共享存储，因此每处声明都安全且必要。
                 # $iooh_s<id>：聚焦角色（初始 0，让 PageUp/PageDown 立即可循环切换）
                 # $iooh_en<id>：启用标志（初始 0，NUMPAD2 对当前聚焦角色翻转）
                 # $iooh_ui<id>：菜单显隐镜像（初始 0，NUMPAD0 与菜单侧 $show_character_ui 巧合同步；
                 #               仅作门控，菜单隐藏时切换/启用键不生效）
+                decls = f'global ${local_var} = 0\nglobal ${enable_var} = 0\nglobal ${ui_var} = 0\n'
                 constants_match = re.search(r'(\[Constants\]\s*\n)', content)
                 if constants_match:
                     insert_pos = constants_match.end()
-                    content = content[:insert_pos] + f'global ${local_var} = 0\nglobal ${enable_var} = 0\nglobal ${ui_var} = 0\n' + content[insert_pos:]
+                    content = content[:insert_pos] + decls + content[insert_pos:]
+                else:
+                    content = f'[Constants]\n{decls}\n' + content
 
-                # 修改每个按键绑定的Key section
+                # 修改每个按键绑定的Key section（所有 ini 都补 condition 门控）
                 binding_map = {b.section_name: b for b in bindings}
                 sections = list(self._iter_sections(content))
                 if sections:
@@ -847,14 +837,15 @@ endif
                     new_parts.append(content[last_idx:])
                     content = ''.join(new_parts)
 
-                # ?????? Key section ???????
-                first_key_match = re.search(r'\[Key\w+\]', content)
-                if first_key_match:
-                    insert_pos = first_key_match.start()
-                    content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
-                else:
-                    # 没有Key section，追加到文件末尾
-                    content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
+                # 仅宿主 ini 注入选择器块（处理器只能存在一份）
+                if is_host:
+                    first_key_match = re.search(r'\[Key\w+\]', content)
+                    if first_key_match:
+                        insert_pos = first_key_match.start()
+                        content = content[:insert_pos] + '\n\n' + selector_block + '\n' + content[insert_pos:]
+                    else:
+                        # 没有Key section，追加到文件末尾
+                        content = content.rstrip('\n') + '\n\n' + selector_block + '\n'
 
                 self._ensure_writable(ini_file)
                 with open(ini_file, 'w', encoding='utf-8') as f:
@@ -988,7 +979,6 @@ GUI_TRANSLATIONS = {
     "lang_btn": {"zh": "🌐 English", "en": "🌐 中文"},
     "col_mod_name": {"zh": "Mod名称", "en": "Mod Name"},
     "col_char_id": {"zh": "角色ID", "en": "Char ID"},
-    "col_detection": {"zh": "检测变量", "en": "Detection"},
     "col_function": {"zh": "功能说明", "en": "Function"},
     "col_key": {"zh": "按键", "en": "Key"},
     "col_status": {"zh": "状态", "en": "Status"},
@@ -1052,7 +1042,6 @@ class KeyConfiguratorGUI:
         
         self.tree.heading("mod_name", text=self._tr("col_mod_name"))
         self.tree.heading("char_id", text=self._tr("col_char_id"))
-        self.tree.heading("detection", text=self._tr("col_detection"))
         self.tree.heading("function", text=self._tr("col_function"))
         self.tree.heading("key", text=self._tr("col_key"))
         self.tree.heading("status", text=self._tr("col_status"))
@@ -1061,8 +1050,8 @@ class KeyConfiguratorGUI:
         for item in self.tree.get_children():
             vals = list(self.tree.item(item, 'values'))
             if vals:
-                # 状态位于第6列（索引5）
-                vals[5] = self._tr("status_configured")
+                # 状态位于第5列（索引4）
+                vals[4] = self._tr("status_configured")
                 self.tree.item(item, values=vals)
         
         self.log_frame.config(text=self._tr("log_frame"))
@@ -1094,12 +1083,11 @@ class KeyConfiguratorGUI:
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
         # 创建表格
-        columns = ("mod_name", "char_id", "detection", "function", "key", "status")
+        columns = ("mod_name", "char_id", "function", "key", "status")
         self.tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=20)
 
         self.tree.column("mod_name", width=250, anchor=tk.W)
         self.tree.column("char_id", width=80, anchor=tk.CENTER)
-        self.tree.column("detection", width=100, anchor=tk.CENTER)
         self.tree.column("function", width=200, anchor=tk.W)
         self.tree.column("key", width=150, anchor=tk.W)
         self.tree.column("status", width=120, anchor=tk.CENTER)
@@ -1141,8 +1129,7 @@ class KeyConfiguratorGUI:
         for mod in mods:
             ini_names = [os.path.basename(f) for f in mod.ini_files]
             key_count = len(mod.key_bindings)
-            detection_info = "有检测" if mod.has_character_detection else "无检测"
-            self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个按键绑定) [{detection_info}]")
+            self.log(f"  ✓ {mod.name}: {', '.join(ini_names)} ({key_count}个按键绑定)")
 
         # 清空表格
         for item in self.tree.get_children():
@@ -1171,7 +1158,6 @@ class KeyConfiguratorGUI:
                 self.tree.insert("", tk.END, values=(
                     mod.name,
                     mod.character_id,
-                    "✓" if mod.has_character_detection else "✗",
                     binding.description,
                     binding.key,
                     self._tr("status_configured")
