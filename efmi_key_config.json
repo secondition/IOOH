@@ -1,0 +1,196 @@
+{
+  "mods": [
+    {
+      "name": "ZhuangFangyi Crimson Bloom Free Ver by LunarBun",
+      "path": "D:/Apps/XXMI-bilibili/EFMI/Mods\\ZhuangFangyi Crimson Bloom Free Ver by LunarBun",
+      "character_id": 0,
+      "ini_files": [
+        "D:/Apps/XXMI-bilibili/EFMI/Mods\\ZhuangFangyi Crimson Bloom Free Ver by LunarBun\\ZhuangFangyi\\draw_image.ini",
+        "D:/Apps/XXMI-bilibili/EFMI/Mods\\ZhuangFangyi Crimson Bloom Free Ver by LunarBun\\ZhuangFangyi\\mod.ini"
+      ],
+      "key_bindings": [
+        {
+          "section": "KeyHelp",
+          "key": "Alt+/",
+          "variable": "$help",
+          "description": "Help (cycle) [$help]"
+        },
+        {
+          "section": "KeyResetPosition",
+          "key": "Ctrl+/",
+          "variable": "$img_x",
+          "description": "ResetPosition (cycle) [$img_x]"
+        },
+        {
+          "section": "KeyMouseDrag",
+          "key": "VK_LBUTTON",
+          "variable": "$mouse_clicked",
+          "description": "MouseDrag (hold) [$mouse_clicked]"
+        }
+      ],
+      "has_character_detection": true
+    },
+    {
+      "name": "[DaisyMeow]Last Rite Danzai Bunny NSFW 1.2 FIX",
+      "path": "D:/Apps/XXMI-bilibili/EFMI/Mods\\[DaisyMeow]Last Rite Danzai Bunny NSFW 1.2 FIX",
+      "character_id": 1,
+      "ini_files": [
+        "D:/Apps/XXMI-bilibili/EFMI/Mods\\[DaisyMeow]Last Rite Danzai Bunny NSFW 1.2 FIX\\BL\\draw_image.ini",
+        "D:/Apps/XXMI-bilibili/EFMI/Mods\\[DaisyMeow]Last Rite Danzai Bunny NSFW 1.2 FIX\\BL\\mod.ini"
+      ],
+      "key_bindings": [
+        {
+          "section": "KeyHelp",
+          "key": "Alt+/",
+          "variable": "$help",
+          "description": "Help (cycle) [$help]"
+        },
+        {
+          "section": "KeyResetPosition",
+          "key": "Ctrl+/",
+          "variable": "$img_x",
+          "description": "ResetPosition (cycle) [$img_x]"
+        },
+        {
+          "section": "KeyMouseDrag",
+          "key": "VK_LBUTTON",
+          "variable": "$mouse_clicked",
+          "description": "MouseDrag (hold) [$mouse_clicked]"
+        },
+        {
+          "section": "Keyheadacc",
+          "key": "0",
+          "variable": "$headacc",
+          "description": "headacc (cycle) [$headacc]"
+        },
+        {
+          "section": "Keyhat",
+          "key": "9",
+          "variable": "$hat",
+          "description": "hat (cycle) [$hat]"
+        },
+        {
+          "section": "Keycollarribbon",
+          "key": "8",
+          "variable": "$collarribbon",
+          "description": "collarribbon (cycle) [$collarribbon]"
+        },
+        {
+          "section": "Keycollar",
+          "key": "7",
+          "variable": "$collar",
+          "description": "collar (cycle) [$collar]"
+        },
+        {
+          "section": "Keychoker",
+          "key": "6",
+          "variable": "$choker",
+          "description": "choker (cycle) [$choker]"
+        },
+        {
+          "section": "KeyshoulderFrill",
+          "key": "Alt+vk_up",
+          "variable": "$shoulderFrill",
+          "description": "shoulderFrill (cycle) [$shoulderFrill]"
+        },
+        {
+          "section": "Keybelt1",
+          "key": "Alt+1",
+          "variable": "$belt1",
+          "description": "belt1 (cycle) [$belt1]"
+        },
+        {
+          "section": "Keybelt2",
+          "key": "Alt+2",
+          "variable": "$belt2",
+          "description": "belt2 (cycle) [$belt2]"
+        },
+        {
+          "section": "Keybelt3",
+          "key": "Alt+3",
+          "variable": "$belt3",
+          "description": "belt3 (cycle) [$belt3]"
+        },
+        {
+          "section": "Keybelt4",
+          "key": "Alt+4",
+          "variable": "$belt4",
+          "description": "belt4 (cycle) [$belt4]"
+        },
+        {
+          "section": "Keysleeves",
+          "key": "vk_left",
+          "variable": "$sleeves",
+          "description": "sleeves (cycle) [$sleeves]"
+        },
+        {
+          "section": "Keycuffs",
+          "key": "Alt+vk_left",
+          "variable": "$cuffs",
+          "description": "cuffs (cycle) [$cuffs]"
+        },
+        {
+          "section": "Keywaistribbon",
+          "key": "vk_right",
+          "variable": "$waistribbon",
+          "description": "waistribbon (cycle) [$waistribbon]"
+        },
+        {
+          "section": "Keybodysuit",
+          "key": "vk_up",
+          "variable": "$bodysuit",
+          "description": "bodysuit (cycle) [$bodysuit]"
+        },
+        {
+          "section": "Keywaistcharm",
+          "key": "Alt+vk_right",
+          "variable": "$waistcharm",
+          "description": "waistcharm (cycle) [$waistcharm]"
+        },
+        {
+          "section": "Keybunnytail",
+          "key": "=",
+          "variable": "$bunnytail",
+          "description": "bunnytail (cycle) [$bunnytail]"
+        },
+        {
+          "section": "Keystockings",
+          "key": "vk_down",
+          "variable": "$stockings",
+          "description": "stockings (cycle) [$stockings]"
+        },
+        {
+          "section": "Keylegbelt",
+          "key": "Alt+vk_down",
+          "variable": "$legbelt",
+          "description": "legbelt (cycle) [$legbelt]"
+        },
+        {
+          "section": "Keyanklet",
+          "key": "Ctrl+vk_left",
+          "variable": "$anklet",
+          "description": "anklet (cycle) [$anklet]"
+        },
+        {
+          "section": "Keyhighheels",
+          "key": "Ctrl+vk_right",
+          "variable": "$highheels",
+          "description": "highheels (cycle) [$highheels]"
+        },
+        {
+          "section": "Keysuitcolor",
+          "key": "[",
+          "variable": "$suitcolor",
+          "description": "suitcolor (cycle) [$suitcolor]"
+        },
+        {
+          "section": "Keystockingscolor",
+          "key": "]",
+          "variable": "$stockingscolor",
+          "description": "stockingscolor (cycle) [$stockingscolor]"
+        }
+      ],
+      "has_character_detection": true
+    }
+  ]
+}

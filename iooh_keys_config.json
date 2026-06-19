@@ -1,0 +1,8 @@
+{
+  "keys": {
+    "toggle_menu": "VK_NUMPAD0",
+    "prev_char": "VK_PRIOR",
+    "next_char": "VK_NEXT",
+    "enable_toggle": "VK_NUMPAD2"
+  }
+}

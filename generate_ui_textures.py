@@ -75,14 +75,10 @@ class UITextureGenerator:
 
     # 按键提示层：状态图案下方的全局静态热键说明（不随角色变化）。
     # HINT_BOX 为提示区域（占模板宽/高比例），多行左对齐居中排版。
+    # 文案由调用方（IOOHKeyConfig）按当前自定义按键传入，确保与 ini 实际按键一致。
     HINT_BOX = (0.12, 0.66, 0.90, 0.94)  # L, T, R, B
     HINT_HEIGHT = 0.026                  # 每行字高（占模板高比例）
     HINT_COLOR = (40, 46, 58, 255)       # 提示文字颜色：深灰
-    HINT_LINES = [
-        "小键盘 0 : 显示 / 隐藏菜单",
-        "PageUp / PageDown : 切换角色",
-        "小键盘 2 : 启用 / 禁用角色",
-    ]
     # 问号颜色：白框为纯白，用深灰问号
     QUESTION_COLOR = (90, 100, 120, 255)
 
@@ -281,8 +277,11 @@ class UITextureGenerator:
         self.save_image(canvas, filename)
         print(f"  生成: {filename} (状态: {'启用' if enabled else '禁用'})")
 
-    def create_hint_layer(self, size: Tuple[int, int]):
-        """生成按键提示层（全局静态）：状态图案下方多行热键说明，居中排版。"""
+    def create_hint_layer(self, size: Tuple[int, int], hint_lines: List[str]):
+        """生成按键提示层（全局静态）：状态图案下方多行热键说明，居中排版。
+
+        hint_lines 由调用方按当前自定义按键传入，与 ini 实际按键保持一致。
+        """
         canvas = Image.new('RGBA', size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
         _, h = size
@@ -293,10 +292,10 @@ class UITextureGenerator:
 
         # 行高按字高 + 行距均分；多行整体在提示区垂直居中
         line_h = int(self.HINT_HEIGHT * h * 1.6)
-        total_h = line_h * len(self.HINT_LINES)
+        total_h = line_h * len(hint_lines)
         y = t + (box_h - total_h) // 2
 
-        for line in self.HINT_LINES:
+        for line in hint_lines:
             tb = draw.textbbox((0, 0), line, font=font)
             tw = tb[2] - tb[0]
             x = l + (box_w - tw) // 2 - tb[0]
@@ -304,11 +303,12 @@ class UITextureGenerator:
             y += line_h
 
         self.save_image(canvas, "hint_keys.png")
-        print(f"  生成: hint_keys.png (按键提示 {len(self.HINT_LINES)} 行)")
+        print(f"  生成: hint_keys.png (按键提示 {len(hint_lines)} 行)")
 
-    def create_character_layers(self, characters: List[dict]):
+    def create_character_layers(self, characters: List[dict], hint_lines: List[str]):
         """为每个角色生成头像层与文字层
         characters 每项: {"display": 中文名, "display_en": 英文名, "keywords": 头像匹配关键词列表}
+        hint_lines: 按键提示纹理的多行文案（与 ini 实际按键一致）。
         """
         print("正在生成角色叠加层（头像/文字）...")
         size = self._muban_size()
@@ -319,7 +319,7 @@ class UITextureGenerator:
         self.create_status_layer(True, size)
         self.create_status_layer(False, size)
         # 按键提示：全局静态一张
-        self.create_hint_layer(size)
+        self.create_hint_layer(size, hint_lines)
 
     def save_image(self, img: Image.Image, filename: str):
         """保存图像为PNG格式（3DMigoto可直接加载）"""
@@ -327,20 +327,25 @@ class UITextureGenerator:
         img.save(filepath, 'PNG')
         print(f"    保存: {filepath}")
 
-    def generate_all(self, characters: List[dict] = None):
+    def generate_all(self, characters: List[dict] = None, hint_lines: List[str] = None):
         """生成所有UI纹理
         characters 每项: {"display": 显示名, "keywords": 头像匹配关键词列表}
+        hint_lines: 按键提示文案；缺省时取 IOOHKeyConfig 的当前/默认按键文案。
         """
         self.setup_directories()
 
         if characters is None:
             characters, _ = self.load_character_names()
 
+        if hint_lines is None:
+            from iooh_keys import IOOHKeyConfig
+            hint_lines = IOOHKeyConfig(self.base_output_dir).hint_lines("zh")
+
         print("=" * 60)
         print("开始生成UI纹理...")
         print("=" * 60)
 
-        self.create_character_layers(characters)
+        self.create_character_layers(characters, hint_lines)
 
         print("=" * 60)
         print(f"UI纹理生成完成！输出目录: {self.output_dir}")
@@ -356,7 +361,7 @@ class UITextureGenerator:
               {"display": 中文显示名, "display_en": 英文显示名, "keywords": 匹配关键词列表}
             keywords 用于在 rolepicture 目录按文件名匹配头像（含英文名）。
         """
-        key_config_path = os.path.join(self.base_output_dir, 'efmi_key_config.json')
+        key_config_path = os.path.join(self.base_output_dir, 'xxmi_key_config.json')
         mapping_path = self.mapping_path
 
         # 1. 读取key配置，获取实际的mod列表

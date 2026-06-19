@@ -1,0 +1,111 @@
+{
+  "version": "1.3",
+  "description": "角色名称映射字典 - 用于游戏内UI显示",
+  "match_rules": [
+    {
+      "keywords": ["laevatain", "莱万汀"],
+      "display_name": "莱万汀",
+      "display_en_name": "Laevatain"
+    },
+    {
+      "keywords": ["perlica", "pelica", "佩丽卡"],
+      "display_name": "佩丽卡",
+      "display_en_name": "Perlica"
+    },
+    {
+      "keywords": ["endmin", "管理员","endministrator"],
+      "display_name": "管理员",
+      "display_en_name": "Endmin"
+    },
+    {
+      "keywords": ["qiuli", "秋栗","akekuri"],
+      "display_name": "秋栗",
+      "display_en_name": "Akekuri"
+    },
+    {
+      "keywords": ["yifeng", "伊冯","yvonne"],
+      "display_name": "伊冯",
+      "display_en_name": "Yvonne"
+    },
+    {
+      "keywords": ["xaihi", "赛希"],
+      "display_name": "赛希",
+      "display_en_name": "Xaihi"
+    },
+    {
+      "keywords": ["ardelia", "艾尔黛拉","小羊"],
+      "display_name": "艾尔黛拉",
+      "display_en_name": "Ardelia"
+    },
+    {
+      "keywords": ["洁尔佩塔", "jie","gilberta"],
+      "display_name": "洁尔佩塔",
+      "display_en_name": "Gilberta"
+    },
+    {
+      "keywords": ["ember", "余烬"],
+      "display_name": "余烬",
+      "display_en_name": "Ember"
+    },
+    {
+      "keywords": ["别礼", "last rite","lastrite"],
+      "display_name": "别礼",
+      "display_en_name": "Last Rite"
+    },
+    {
+      "keywords": ["avywenna", "艾维文娜"],
+      "display_name": "艾维文娜",
+      "display_en_name": "Avywenna"
+    },
+    {
+      "keywords": ["zhuangfangyi", "庄方宜"],
+      "display_name": "庄方宜",
+      "display_en_name": "Zhuang Fangyi"
+    },
+    {
+      "keywords": ["mifu", "弭弗"],
+      "display_name": "弭弗",
+      "display_en_name": "Mifu"
+    },
+    {
+      "keywords": ["arclight", "弧光"],
+      "display_name": "弧光",
+      "display_en_name": "Arclight"
+    },
+    {
+      "keywords": ["chenqianyu", "陈千语"],
+      "display_name": "陈千语",
+      "display_en_name": "Chen Qianyu"
+    },
+    {
+      "keywords": ["rossi", "洛茜"],
+      "display_name": "洛茜",
+      "display_en_name": "Rossi"
+    },
+    {
+      "keywords": ["汤汤", "tangtang"],
+      "display_name": "汤汤",
+      "display_en_name": "tang tang"
+    },
+    {
+      "keywords": ["fluorite", "萤石"],
+      "display_name": "萤石",
+      "display_en_name": "Fluorite"
+    },
+    {
+      "keywords": ["snowshine", "昼雪"],
+      "display_name": "昼雪",
+      "display_en_name": "Snowshine"
+    },
+    {
+      "keywords": ["estella", "埃特拉"],
+      "display_name": "埃特拉",
+      "display_en_name": "Estella"
+    }
+  ],
+  "notes": [
+    "匹配规则：不区分大小写，包含任一关键词即匹配",
+    "未匹配的mod将显示原始mod名称",
+    "可自行添加新的角色映射规则"
+  ]
+}
