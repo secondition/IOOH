@@ -296,6 +296,13 @@ class EFMIKeyConfigurator:
                 if not key:
                     continue
 
+                # 鼠标键 section 是菜单内部交互处理器（拖拽/点击），不是角色功能热键。
+                # 一律不纳入注入：给 type=hold 的 VK_LBUTTON 追加门控会破坏按下/释放配对，
+                # 导致拖拽检测不到鼠标抬起、点击区域检测失败。这些块由 $menu 隐式门控
+                # （菜单入口热键仍受 $iooh_en 控制），无需再单独注入。
+                if re.search(r'(?i)VK_[LMR]BUTTON|VK_XBUTTON', key):
+                    continue
+
                 # 提取变量名和类型
                 variable = self._extract_variable_from_section(section_content)
                 binding_type = self._extract_type_from_section(section_content)
@@ -896,6 +903,33 @@ endif
 
         return '\n'.join(modified_lines)
 
+    @staticmethod
+    def _strip_condition_gates(match) -> str:
+        """从单行 condition 中移除 IOOH 门控项；条件清空则删除整行。
+
+        令牌集合与 _modify_key_section_with_context 追加时一致，确保注入可逆。
+        """
+        line = match.group(1)
+        head, cond_text = line.split('=', 1)
+        cond = cond_text
+        cond = re.sub(r'\s*&&\s*\$iooh_en\d*\s*==\s*\d+', '', cond)
+        cond = re.sub(r'\$iooh_en\d*\s*==\s*\d+\s*&&\s*', '', cond)
+        cond = re.sub(r'\$iooh_en\d*\s*==\s*\d+', '', cond)
+        cond = re.sub(r'\s*&&\s*\$iooh_s\d*\s*==\s*\d+', '', cond)
+        cond = re.sub(r'\$iooh_s\d*\s*==\s*\d+\s*&&\s*', '', cond)
+        cond = re.sub(r'\$iooh_s\d*\s*==\s*\d+', '', cond)
+        cond = re.sub(r'\s*&&\s*\$iooh_sel\s*==\s*\d+', '', cond)
+        cond = re.sub(r'\$iooh_sel\s*==\s*\d+\s*&&\s*', '', cond)
+        cond = re.sub(r'\$iooh_sel\s*==\s*\d+', '', cond)
+        cond = re.sub(r'\s*&&\s*\$\w+_sel\s*==\s*\d+', '', cond)
+        cond = re.sub(r'\$\w+_sel\s*==\s*\d+\s*&&\s*', '', cond)
+        cond = re.sub(r'\$\w+_sel\s*==\s*\d+', '', cond)
+        cond = cond.strip()
+        # 条件被清空：原本无 condition，删除整行（返回哨兵，随后压缩空行清理）
+        if not cond:
+            return ''
+        return f'{head}= {cond}'
+
     def _strip_local_selector(self, content: str) -> str:
         """移除各mod ini中的IOOH注入内容（本地选择器变量、上下键、旧CommandList）"""
         # 移除 global persist $selected_character 行
@@ -932,6 +966,12 @@ endif
         content = re.sub(r'^global \$\w+_sel\s*=\s*\d+\s*\n', '', content, flags=re.MULTILINE)
         content = re.sub(r'\[Key_\w+_(?:Select(?:Up|Down)|ToggleUI|ToggleVisible)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
         content = re.sub(r'\[CommandList_\w+_(?:Select(?:Up|Down)|ToggleUI|ToggleVisible)\][\s\S]*?(?=\n\[|\Z)', '', content, flags=re.MULTILINE)
+
+        # 剥离历史注入残留在 condition 行里的门控项（$iooh_en/$iooh_s/$iooh_sel/$*_sel）。
+        # 早期版本会对鼠标键 section 也注入门控；如今这些 section 不再纳入注入、不走
+        # _modify_key_section_with_context 的清理，故在此统一还原任意 condition 行：
+        # 去掉门控项后若 condition 为空则整行删除（原本无 condition 的 section 复原）。
+        content = re.sub(r'(?im)^([ \t]*condition\s*=.*)$', self._strip_condition_gates, content)
 
         # 清理多余空行（3个以上连续空行压缩为2个）
         content = re.sub(r'\n{4,}', '\n\n\n', content)
