@@ -20,33 +20,19 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Generated files
+# Generated files（运行时生成，不入库）
 *.log
 xxmi_key_config.json
-
-# Generated UI textures (运行时渲染产物；源素材在 assets/ 下，纳入版本管理)
-resources/
-
-# Reference projects
-snaccubus-endminfmegamenumod-publicv6_update2/
-Default.ini.backup
-IOOH.zip
 IOOHmod.ini
+
+# Generated UI textures（运行时由工具生成，不入库）
+resources/
 
 # PyInstaller build artifacts
 build/
 dist/
 *.spec
+!iooh.spec
 
 # Python local virtual environments
 .venv/
-*.png
-*.jpg
-problem.ini
-
-# 用户自定义资源（不打包、不入库）：头像目录与角色映射，运行时自动创建
-rolepicture/
-/character_name_mapping.json
-
-# muban 模板需随包分发，强制纳入版本管理（覆盖上面的 *.png）
-!assets/muban.png
