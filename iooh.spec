@@ -1,24 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from pathlib import Path
-
-
-def collect_tree(source_dir, target_dir):
-    source_path = Path(source_dir)
-    return [
-        (
-            str(path),
-            str(
-                Path(target_dir) / path.relative_to(source_path).parent
-            ).replace(".", "")
-        )
-        for path in source_path.rglob('*')
-        if path.is_file()
-    ]
-
-
-datas = collect_tree('shaders', 'shaders')
-datas += [('icon.ico', '.')]
+datas = [('icon.ico', '.')]
 
 
 a = Analysis(

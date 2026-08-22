@@ -356,14 +356,14 @@ class KeyConfiguratorGUI:
                 self._tree_bindings[item] = binding
 
     def _auto_config(self):
-        """自动配置：增量清理旧注入 → 注入全局开关 → 生成主 ini/配置/纹理。"""
+        """自动配置：增量清理旧注入 → 注入全局开关 → 生成主 ini/配置。"""
         if not self.configurator.mods:
             messagebox.showwarning("提示", "请先扫描 Mods 目录")
             return
         self._run_pipeline()
 
     def _run_pipeline(self):
-        """完整流程：注入全局开关 → 生成主 ini → 保存配置 → 生成纹理 → 打印说明。
+        """完整流程：注入全局开关 → 生成主 ini → 保存配置 → 打印说明。
 
         注入靠 _strip_local_selector 增量清理上次注入内容（不还原备份），改键由
         内存 binding.key 承载、注入时写进 ini，故 ini 自身即改键的真实来源、天然跨启动持久。
@@ -381,22 +381,12 @@ class KeyConfiguratorGUI:
                 self.log(f"  ✗ {mod.name} 配置失败")
         self.log(f"注入完成: {success_count}/{len(mods)}")
 
-        # 生成主 IOOHmod.ini（全局热键开关 + 左下角状态条）
+        # 生成主 IOOHmod.ini（全局热键开关 + help.ini 通知）
         if self.configurator.generate_main_mod_ini():
             self.log(f"✓ 主配置已生成: IOOHmod.ini (已扫描 mod 数:{len(mods)})")
 
         if self.configurator.save_config():
             self.log(f"✓ 配置已保存到 {self.configurator.config_file}")
-
-        # 生成状态条纹理（启用/禁用两张）
-        self.log("正在生成UI纹理...")
-        try:
-            from generate_ui_textures import UITextureGenerator
-            generator = UITextureGenerator(base_output_dir=self.configurator._resolve_output_dir())
-            generator.generate_all(lang=self.lang)
-            self.log("✓ UI纹理已自动生成")
-        except Exception as e:
-            self.log(f"✗ UI纹理生成异常: {e}")
 
         # 完成信息（按键说明随当前自定义按键动态显示）
         ioohk = self.configurator.iooh_keys
@@ -405,7 +395,7 @@ class KeyConfiguratorGUI:
         self.log("=" * 60)
         self.log("配置完成！使用说明：")
         self.log(f"1. 按下 {enable_name}：所有已注入 mod 的热键一起启用或一起禁用")
-        self.log("2. 屏幕左下角始终显示当前状态：开 / 关")
+        self.log("2. 每次按下后左下角弹出黄绿通知（IOOH hotkeys ON/OFF），约 5 秒后消失")
         self.log("3. 无需修改 d3dx.ini")
         self.log("=" * 60)
 

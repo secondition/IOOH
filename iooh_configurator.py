@@ -8,7 +8,8 @@
   （三方监听同一物理按键、各自相同计数，实现无通信巧合同步）
 - Key section 保留原有 type，condition 使用本地变量 $iooh_en 判断
 - 3DMigoto Key condition 只能可靠引用同文件变量，跨文件引用无效
-- 主 ini 同样持有一份 $iooh_en，用于画左下角状态条（开/关）
+- 主 ini 同样持有一份 $iooh_en；每次按下开关键时走 XXMI ShaderFixes\\help.ini
+  通知（与 credits 同一套黄绿字），约 5 秒后消失。每次触发都显示，不是首次才显示
 
 IOOH 全局开关键集中在 IOOHKeyConfig（iooh_keys.py），主 ini 与各 mod
 开关块共用同一份按键，确保巧合同步成立；用户可在 UI 自定义。
@@ -55,32 +56,6 @@ class EFMIKeyConfigurator:
         """Always write generated files next to the running executable."""
         return self._get_output_dir()
 
-    def _ensure_runtime_shader_assets(self):
-        """Copy bundled runtime assets (shaders) next to the executable."""
-        self._copy_bundled_tree("shaders")
-
-    def _copy_bundled_tree(self, rel_dir: str):
-        """Copy a bundled directory tree to the output dir (skip when identical)."""
-        source_dir = os.path.join(self._get_bundle_dir(), rel_dir)
-        target_dir = os.path.join(self._resolve_output_dir(), rel_dir)
-        if not os.path.isdir(source_dir):
-            return
-
-        # 开发环境下 bundle 目录与输出目录相同，源即目标，无需复制
-        if os.path.normcase(os.path.abspath(source_dir)) == os.path.normcase(os.path.abspath(target_dir)):
-            return
-
-        os.makedirs(target_dir, exist_ok=True)
-        for root, _, files in os.walk(source_dir):
-            relative_root = os.path.relpath(root, source_dir)
-            current_target_dir = target_dir if relative_root == "." else os.path.join(target_dir, relative_root)
-            os.makedirs(current_target_dir, exist_ok=True)
-            for file in files:
-                source_file = os.path.join(root, file)
-                target_file = os.path.join(current_target_dir, file)
-                shutil.copy2(source_file, target_file)
-
-    @staticmethod
     def _ensure_writable(filepath: str):
         """移除文件只读属性（如有）"""
         if os.path.exists(filepath) and not os.access(filepath, os.W_OK):
@@ -367,14 +342,12 @@ class EFMIKeyConfigurator:
         return " ".join(desc_parts) if desc_parts else section_name
 
     def generate_main_mod_ini(self, output_path: str = None):
-        """生成 IOOH 主 ini：全局热键开关 + 左下角状态条
+        """生成 IOOH 主 ini：全局热键开关 + help.ini 通知
 
-        状态条固定左下角，不 persist、不拖拽。主 ini 持有一份 $iooh_en，
-        与各 mod ini 的 $iooh_en 监听同一物理键、各自翻转（巧合同步），
-        仅用于画开/关状态。
+        主 ini 持有一份 $iooh_en，与各 mod ini 的 $iooh_en 监听同一物理键、
+        各自翻转（巧合同步）。每次按下开关键都把状态字符串交给
+        ShaderFixes\\help.ini 的 FormatText，约 5 秒后消失。
         """
-        self._ensure_runtime_shader_assets()
-
         if output_path is None:
             output_path = os.path.join(self._resolve_output_dir(), "IOOHmod.ini")
 
@@ -402,39 +375,23 @@ run = CommandList_Toggle
 [CommandList_Toggle]
 if $iooh_en == 1
     $iooh_en = 0
+    pre Resource\\ShaderFixes\\help.ini\\Notification = ResourceIOOHOff
+    pre run = CustomShader\\ShaderFixes\\help.ini\\FormatText
+    pre $\\ShaderFixes\\help.ini\\notification_timeout = time + 5.0
 else
     $iooh_en = 1
+    pre Resource\\ShaderFixes\\help.ini\\Notification = ResourceIOOHOn
+    pre run = CustomShader\\ShaderFixes\\help.ini\\FormatText
+    pre $\\ShaderFixes\\help.ini\\notification_timeout = time + 5.0
 endif
 
-[Present]
-run = CustomShaderDrawUI
+[ResourceIOOHOn]
+type = Buffer
+data = "IOOH hotkeys ON"
 
-[CustomShaderDrawUI]
-vs = shaders\\draw_2d_ui.hlsl
-ps = shaders\\draw_2d_ui.hlsl
-run = BuiltInCommandListUnbindAllRenderTargets
-blend = ADD SRC_ALPHA INV_SRC_ALPHA
-cull = none
-topology = triangle_strip
-o0 = set_viewport bb
-
-x87 = 0.1400
-y87 = 0.0450
-z87 = 0.0100
-w87 = 0.9400
-
-if $iooh_en == 1
-    ps-t100 = ResourceStatusEnabled
-else
-    ps-t100 = ResourceStatusDisabled
-endif
-Draw = 4,0
-
-[ResourceStatusEnabled]
-filename = resources\\textures\\status_enabled.png
-
-[ResourceStatusDisabled]
-filename = resources\\textures\\status_disabled.png
+[ResourceIOOHOff]
+type = Buffer
+data = "IOOH hotkeys OFF"
 """
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
