@@ -25,8 +25,8 @@ GUI_TRANSLATIONS = {
     "col_status": {"zh": "状态", "en": "Status"},
     "status_configured": {"zh": "✓ 已配置", "en": "✓ Configured"},
     "log_frame": {"zh": "操作日志", "en": "Operation Log"},
-    "keys_frame": {"zh": "IOOH 菜单按键自定义（点击按钮后按下目标键即可绑定）",
-                   "en": "IOOH Menu Key Customization (click a button, then press the target key)"},
+    "keys_frame": {"zh": "IOOH 全局开关按键自定义（点击按钮后按下目标键即可绑定）",
+                   "en": "IOOH Toggle Key Customization (click the button, then press the target key)"},
     "key_capturing": {"zh": "请按下按键…（Esc 取消）", "en": "Press a key…  (Esc to cancel)"},
     "row_capturing": {"zh": "按下按键…(Esc取消)", "en": "Press key… (Esc)"},
 }
@@ -155,7 +155,7 @@ class KeyConfiguratorGUI:
         self.btn_lang = ttk.Button(toolbar, command=self._toggle_lang)
         self.btn_lang.pack(side=tk.RIGHT, padx=5)
 
-        # IOOH 菜单按键自定义区（四个动作各一个下拉框）
+        # IOOH 全局开关按键自定义区（单个动作）
         self._create_keys_panel()
 
         # 主要内容区域
@@ -189,7 +189,7 @@ class KeyConfiguratorGUI:
         self.log_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
     def _create_keys_panel(self):
-        """创建 IOOH 菜单按键自定义面板：每个动作一个按钮，点击后按下目标键完成绑定。"""
+        """创建 IOOH 全局开关按键自定义面板：点击按钮后按下目标键完成绑定。"""
         self.keys_frame = ttk.LabelFrame(self.root)
         self.keys_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(0, 5))
 
@@ -220,7 +220,7 @@ class KeyConfiguratorGUI:
         self.root.focus_set()
 
     def _on_key_capture(self, event):
-        """全局键盘回调：菜单键捕获 / mod 列表改键捕获，二者互斥；空闲时放行。"""
+        """全局键盘回调：开关键捕获 / mod 列表改键捕获，二者互斥；空闲时放行。"""
         if self._row_capture is not None:
             return self._handle_row_capture(event)
         if self._capturing_action is None:
@@ -356,14 +356,14 @@ class KeyConfiguratorGUI:
                 self._tree_bindings[item] = binding
 
     def _auto_config(self):
-        """自动配置：增量清理旧注入 → 注入选择器 → 生成主 ini/配置/纹理。"""
+        """自动配置：增量清理旧注入 → 注入全局开关 → 生成主 ini/配置/纹理。"""
         if not self.configurator.mods:
             messagebox.showwarning("提示", "请先扫描 Mods 目录")
             return
         self._run_pipeline()
 
     def _run_pipeline(self):
-        """完整流程：注入选择器 → 生成主 ini → 保存配置 → 生成纹理 → 打印说明。
+        """完整流程：注入全局开关 → 生成主 ini → 保存配置 → 生成纹理 → 打印说明。
 
         注入靠 _strip_local_selector 增量清理上次注入内容（不还原备份），改键由
         内存 binding.key 承载、注入时写进 ini，故 ini 自身即改键的真实来源、天然跨启动持久。
@@ -371,7 +371,7 @@ class KeyConfiguratorGUI:
         """
         mods = self.configurator.mods
 
-        self.log("开始备份并注入选择器上下文...")
+        self.log("开始备份并注入全局开关...")
         success_count = 0
         for mod in mods:
             if self.configurator.modify_mod_ini(mod):
@@ -381,35 +381,31 @@ class KeyConfiguratorGUI:
                 self.log(f"  ✗ {mod.name} 配置失败")
         self.log(f"注入完成: {success_count}/{len(mods)}")
 
-        # 生成主 IOOHmod.ini（动态角色列表）
+        # 生成主 IOOHmod.ini（全局热键开关 + 左下角状态条）
         if self.configurator.generate_main_mod_ini():
-            self.log(f"✓ 主UI配置已生成: IOOHmod.ini (角色数:{len(mods)})")
+            self.log(f"✓ 主配置已生成: IOOHmod.ini (已扫描 mod 数:{len(mods)})")
 
-        # 主 ini 引用 xxmi_key_config.json 派生的纹理；生成纹理前确保中间配置就位
         if self.configurator.save_config():
             self.log(f"✓ 配置已保存到 {self.configurator.config_file}")
 
-        # 生成UI纹理（按键提示文案随当前自定义按键动态生成）
+        # 生成状态条纹理（启用/禁用两张）
         self.log("正在生成UI纹理...")
         try:
             from generate_ui_textures import UITextureGenerator
             generator = UITextureGenerator(base_output_dir=self.configurator._resolve_output_dir())
-            generator.generate_all(hint_lines=self.configurator.iooh_keys.hint_lines(self.lang))
+            generator.generate_all(lang=self.lang)
             self.log("✓ UI纹理已自动生成")
         except Exception as e:
             self.log(f"✗ UI纹理生成异常: {e}")
 
         # 完成信息（按键说明随当前自定义按键动态显示）
         ioohk = self.configurator.iooh_keys
-        toggle_name = key_display(ioohk.token("toggle_menu"), "zh")
-        prev_name = key_display(ioohk.token("prev_char"), "zh")
-        next_name = key_display(ioohk.token("next_char"), "zh")
         enable_name = key_display(ioohk.token("enable_toggle"), "zh")
         self.log("")
         self.log("=" * 60)
         self.log("配置完成！使用说明：")
-        self.log(f"1. {toggle_name} 显示/隐藏UI，{prev_name}/{next_name} 切换角色，{enable_name} 启用/禁用")
-        self.log("2. 热键仅在对应角色被选中时生效，实现热键复用")
+        self.log(f"1. 按下 {enable_name}：所有已注入 mod 的热键一起启用或一起禁用")
+        self.log("2. 屏幕左下角始终显示当前状态：开 / 关")
         self.log("3. 无需修改 d3dx.ini")
         self.log("=" * 60)
 

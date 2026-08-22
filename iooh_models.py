@@ -22,7 +22,7 @@ class ModInfo:
         self.name = name
         self.path = path
         self.ini_files = ini_files or []
-        self.character_id = 0  # 角色ID（用于选择器变量）
+        self.character_id = 0  # 角色ID（扫描列表序号，不再参与变量名）
         self.key_bindings: List[ModKeyBinding] = []
         self.has_backup = False
         self.ini_file_backups: Dict[str, bool] = {}

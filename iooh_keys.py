@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""IOOH 菜单按键配置：四个菜单控制键的单一数据源。
+"""IOOH 全局热键开关按键配置：单一开关键的单一数据源。
 
-IOOH 菜单依赖四个物理键（默认：小键盘0 显隐、PageUp/PageDown 切换、小键盘2 启用）。
-这些键原先硬编码在主 ini 生成、各 mod 选择器块注入、以及按键提示纹理三处，
-必须保持完全一致才能实现「三方监听同一物理键、各自相同计数」的巧合同步。
+IOOH 依赖一个物理键（默认：小键盘2）作为全局热键开关。按下后所有已注入
+mod 的热键一起启用或一起禁用。该键原先硬编码在主 ini 生成、各 mod 开关块
+注入、以及状态条逻辑三处，必须保持完全一致才能实现「三方监听同一物理键、
+各自相同翻转」的巧合同步。
 
-本模块把这四个键集中到 IOOHKeyConfig 一处：
+本模块把该键集中到 IOOHKeyConfig 一处：
 - 持久化到 exe/脚本同级的 iooh_keys_config.json（用户可在 UI 自定义）
 - 统一产出 ini 用的 key 行（key_line）
-- 统一产出按键提示纹理用的多行文案（hint_lines）
 
 对没有小键盘的用户，可在 UI 把默认的小键盘键改为 PageUp/Home/功能键等。
 """
@@ -21,23 +21,17 @@ from typing import Dict, List, Tuple
 # 配置文件名（位于 exe/脚本同级，用户自定义后持久保存，不随包分发）
 IOOH_KEYS_FILENAME = "iooh_keys_config.json"
 
-# 四个菜单动作的标识与默认按键 token（token 为 3DMigoto 主键名）。
+# 全局开关动作的标识与默认按键 token（token 为 3DMigoto 主键名）。
 # key 行统一加 `no_ctrl no_alt` 前缀，避免与游戏内修饰键组合冲突。
-ACTIONS: List[str] = ["toggle_menu", "prev_char", "next_char", "enable_toggle"]
+ACTIONS: List[str] = ["enable_toggle"]
 
 DEFAULT_KEYS: Dict[str, str] = {
-    "toggle_menu": "VK_NUMPAD0",
-    "prev_char": "VK_PRIOR",
-    "next_char": "VK_NEXT",
     "enable_toggle": "VK_NUMPAD2",
 }
 
-# 动作的中英文说明（用于 UI 标签与提示纹理文案）
+# 动作的中英文说明（用于 UI 标签）
 ACTION_LABELS: Dict[str, Dict[str, str]] = {
-    "toggle_menu": {"zh": "显示 / 隐藏菜单", "en": "Show / Hide Menu"},
-    "prev_char": {"zh": "上一个角色", "en": "Previous Character"},
-    "next_char": {"zh": "下一个角色", "en": "Next Character"},
-    "enable_toggle": {"zh": "启用 / 禁用角色", "en": "Enable / Disable Character"},
+    "enable_toggle": {"zh": "启用 / 禁用全部热键", "en": "Enable / Disable All Hotkeys"},
 }
 
 # ===== 物理按键捕获 =====
@@ -107,7 +101,7 @@ def token_for_keycode(keycode: int):
 
 
 # ===== mod 列表按键捕获（支持修饰键组合）=====
-# 与 IOOH 菜单键不同：mod 原始热键常带修饰键（Alt+1、Ctrl+/、vk_left），
+# 与 IOOH 开关键不同：mod 原始热键常带修饰键（Alt+1、Ctrl+/、vk_left），
 # 因此捕获时读取 event.state 的 Alt/Ctrl/Shift 位 + 主键，产出 ini 形式键值
 # （如 "alt 1"、"ctrl VK_LEFT"、"VK_NUMPAD0"），直接写入 ini，列表也按此原文显示
 # （不转友好符号，保持与 ini 一致）。
@@ -144,7 +138,7 @@ def capture_with_modifiers(keycode: int, state: int):
 
 
 class IOOHKeyConfig:
-    """IOOH 菜单四个控制键的单一数据源（含持久化、ini key 行、提示文案）。"""
+    """IOOH 全局开关键的单一数据源（含持久化与 ini key 行）。"""
 
     def __init__(self, output_dir: str):
         # 配置写到 exe/脚本同级，自定义后持久保存
@@ -191,17 +185,3 @@ class IOOHKeyConfig:
     def key_line(self, action: str) -> str:
         """返回写入 ini 的 key 行值（含 no_ctrl no_alt 前缀）。"""
         return f"no_ctrl no_alt {self.keys[action]}"
-
-    def hint_lines(self, lang: str = "zh") -> List[str]:
-        """返回按键提示纹理用的多行文案（依据当前按键动态生成）。"""
-        if lang == "en":
-            return [
-                f"{key_display(self.keys['toggle_menu'], 'en')} : {ACTION_LABELS['toggle_menu']['en']}",
-                f"{key_display(self.keys['prev_char'], 'en')} / {key_display(self.keys['next_char'], 'en')} : Switch Character",
-                f"{key_display(self.keys['enable_toggle'], 'en')} : {ACTION_LABELS['enable_toggle']['en']}",
-            ]
-        return [
-            f"{key_display(self.keys['toggle_menu'], 'zh')} : {ACTION_LABELS['toggle_menu']['zh']}",
-            f"{key_display(self.keys['prev_char'], 'zh')} / {key_display(self.keys['next_char'], 'zh')} : 切换角色",
-            f"{key_display(self.keys['enable_toggle'], 'zh')} : {ACTION_LABELS['enable_toggle']['zh']}",
-        ]
