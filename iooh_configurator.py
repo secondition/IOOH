@@ -56,6 +56,7 @@ class EFMIKeyConfigurator:
         """Always write generated files next to the running executable."""
         return self._get_output_dir()
 
+    @staticmethod
     def _ensure_writable(filepath: str):
         """移除文件只读属性（如有）"""
         if os.path.exists(filepath) and not os.access(filepath, os.W_OK):
