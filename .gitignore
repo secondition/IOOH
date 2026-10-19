@@ -1,3 +1,7 @@
+# Electron
+/node_modules/
+/QAQManagerV4/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -25,14 +29,9 @@ Thumbs.db
 xxmi_key_config.json
 IOOHmod.ini
 
-# Generated UI textures（运行时由工具生成，不入库）
-resources/
-
-# PyInstaller build artifacts
+# Build artifacts
 build/
 dist/
-*.spec
-!iooh.spec
 
 # Python local virtual environments
 .venv/

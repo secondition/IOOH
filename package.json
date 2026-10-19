@@ -1,0 +1,40 @@
+{
+	"name": "IOOH",
+	"version": "1.0.0",
+	"productName": "IOOH",
+	"description": "Mod presets and global hotkey control",
+	"main": "src/main.js",
+	"scripts": {
+		"start": "electron .",
+		"check": "biome check .",
+		"test": "node --test",
+		"build": "electron-builder --win"
+	},
+	"build": {
+		"appId": "iooh.app",
+		"files": [
+			"index.html",
+			"icon.ico",
+			"src/**/*",
+			"assets/**/*",
+			"package.json"
+		],
+		"win": {
+			"target": "portable",
+			"icon": "icon.ico"
+		}
+	},
+	"devEngines": {
+		"packageManager": {
+			"name": "pnpm",
+			"version": "12.14.0",
+			"onFail": "download"
+		}
+	},
+	"packageManager": "pnpm@12.14.0",
+	"type": "module",
+	"devDependencies": {
+		"electron": "^44.9.0",
+		"electron-builder": "^26.15.3"
+	}
+}
