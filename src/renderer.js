@@ -6,6 +6,7 @@ let editingPreset = null;
 let deletingPreset = null;
 let search = "";
 let populatedOnly = false;
+let alphabetical = false;
 let capture = null;
 let busy = false;
 const edits = new Map();
@@ -87,12 +88,14 @@ function renderMods() {
 			(!populatedOnly || character.mods.length) &&
 			character.name.toLowerCase().includes(search.toLowerCase()),
 	);
+	if (alphabetical)
+		visible.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
 	const cards = (characters) =>
 		`<div class="grid">${characters.map((character) => `<button class="character-card${character.other ? "" : " portrait"}" data-action="character" data-character="${escapeHtml(character.name)}"><div class="card-image" data-cover="${escapeHtml(character.name)}">${escapeHtml(character.name[0])}</div><div class="card-name">${escapeHtml(character.name)}<span class="card-count">${character.mods.filter((mod) => mod.enabled).length}/${character.mods.length} 个 Mod</span></div></button>`).join("")}</div>`;
 	const loosePanel = data.loose.length
 		? `<section class="panel"><h2 class="panel-title">待归类的 Mod · ${data.loose.length}</h2>${data.loose.map((mod) => `<div class="inline"><strong>${escapeHtml(mod.name)}</strong><select aria-label="${escapeHtml(mod.name)}的目标分类" data-loose="${escapeHtml(mod.name)}"><option value="">选择分类</option>${data.characters.map((character) => `<option value="${escapeHtml(character.name)}">${escapeHtml(character.name)}</option>`).join("")}</select><button class="secondary" data-action="move" data-loose="${escapeHtml(mod.name)}">归类</button></div>`).join("")}</section>`
 		: "";
-	content.innerHTML = `<div class="page-head"><div><h1>模组列表</h1><p class="subtitle">${data.characters.reduce((sum, character) => sum + character.mods.length, data.loose.length)} 个 Mod</p></div></div><section class="category-section"><div class="section-controls"><div class="page-head"><h2 class="section-title">其他模组</h2></div></div>${loosePanel}${cards(other)}</section><section class="category-section"><div class="section-controls"><div class="page-head"><h2 class="section-title">角色列表</h2><div class="inline role-filters"><label class="checkbox"><input type="checkbox" id="populated-only" ${populatedOnly ? "checked" : ""} />仅显示有 Mod 的角色</label><input id="search" class="search" aria-label="搜索角色" placeholder="搜索角色…" value="${escapeHtml(search)}" /></div></div><form id="add-role" class="inline add-role"><input class="field" name="name" placeholder="新建角色分类" required /><button class="secondary">添加角色</button></form></div>${visible.length ? cards(visible) : '<div class="empty">暂无符合条件的角色</div>'}</section>`;
+	content.innerHTML = `<div class="page-head"><div><h1>模组列表</h1><p class="subtitle">${data.characters.reduce((sum, character) => sum + character.mods.length, data.loose.length)} 个 Mod</p></div></div><section class="category-section"><div class="section-controls"><div class="page-head"><h2 class="section-title">其他模组</h2></div></div>${loosePanel}${cards(other)}</section><section class="category-section"><div class="section-controls"><div class="page-head"><h2 class="section-title">角色列表</h2><div class="inline role-filters"><label class="checkbox"><input type="checkbox" id="populated-only" ${populatedOnly ? "checked" : ""} />仅显示有 Mod 的角色</label><button class="secondary" data-action="alphabetize" aria-pressed="${alphabetical}">首字母排序</button><input id="search" class="search" aria-label="搜索角色" placeholder="搜索角色…" value="${escapeHtml(search)}" /></div></div><form id="add-role" class="inline add-role"><input class="field" name="name" placeholder="新建角色分类" required /><button class="secondary">添加角色</button></form></div>${visible.length ? cards(visible) : '<div class="empty">暂无符合条件的角色</div>'}</section>`;
 	for (const element of content.querySelectorAll("[data-cover]")) {
 		const name = element.dataset.cover;
 		if (!covers.has(name)) covers.set(name, window.iooh.cover(name));
@@ -279,6 +282,11 @@ content.addEventListener("click", async (event) => {
 	const button = event.target.closest("[data-action]");
 	if (!button) return;
 	const { action, character, mod, loose, id, file, section } = button.dataset;
+	if (action === "alphabetize") {
+		alphabetical = !alphabetical;
+		renderMods();
+		return;
+	}
 	if (action === "character") {
 		selectedCharacter = character;
 		render();

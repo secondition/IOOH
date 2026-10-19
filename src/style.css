@@ -29,6 +29,9 @@ button:disabled {
 .app {
 	display: flex;
 	height: 100vh;
+	background:
+		linear-gradient(#f6f7fbcc, #f6f7fbcc),
+		url("../Remielle2.jpg") center / cover no-repeat;
 }
 .sidebar {
 	width: 220px;
@@ -36,7 +39,7 @@ button:disabled {
 	display: flex;
 	flex-direction: column;
 	padding: 28px 14px 20px;
-	background: #fff;
+	background: #ffffff80;
 	border-right: 1px solid #e9eaf2;
 }
 .brand {
@@ -125,6 +128,11 @@ nav {
 .secondary:hover {
 	background: #f8f8fe;
 }
+.secondary[aria-pressed="true"] {
+	background: #f0efff;
+	border-color: #8375e3;
+	color: #625f8e;
+}
 .danger {
 	background: #fff4f2;
 	border-color: #f9d8d4;
@@ -143,7 +151,7 @@ main {
 	top: 0;
 	z-index: 2;
 	min-height: 78px;
-	background: white;
+	background: #fffffff2;
 	border-bottom: 1px solid #e9eaf2;
 	display: flex;
 	align-items: center;
@@ -228,7 +236,7 @@ h1 {
 	z-index: 1;
 	display: flow-root;
 	padding-top: 10px;
-	background: #f6f7fb;
+	background: #f6f7fbf2;
 }
 .section-title {
 	margin: 0;
@@ -271,8 +279,8 @@ h1 {
 	align-items: center;
 	flex-wrap: wrap;
 }
-.inline select,
-.inline input {
+.inline > select,
+.inline > input {
 	min-width: 160px;
 	flex: 1;
 }
