@@ -4,7 +4,7 @@ import path from "node:path";
 
 const covers = new URL("../assets/covers/", import.meta.url);
 const knownCharacters = new Set(directories(covers).map((item) => item.name));
-const otherNames = new Set(["NPC", "UI", "功能", "大世界"]);
+const otherNames = new Set(["NPC", "UI", "功能", "大世界", "主角"]);
 const marker = "; ===== IOOH 全局开关 =====";
 const markerEnd = "; ===== IOOH 全局开关结束 =====";
 
