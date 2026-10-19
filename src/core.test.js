@@ -37,7 +37,7 @@ test("角色归类、预设切换与全局热键注入", () => {
 		true,
 	);
 	assert.match(coverPath("安比").pathname, /AnbyM6\.png$/);
-	assert.match(coverPath("主角").pathname, /_cover\.webp$/);
+	assert.match(coverPath("主角").pathname, /_cover\.jpg$/);
 	assert.equal(
 		scan(root).characters.find((char) => char.name === "主角").other,
 		true,
