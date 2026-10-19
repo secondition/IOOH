@@ -58,15 +58,17 @@ function render() {
 	document.querySelector("#global-key").textContent = capture?.global
 		? "请按下目标键 · Esc 取消"
 		: data.key;
-	document.querySelector("#page-title").textContent =
-		page === "characters" ? "角色列表" : "预设配置";
 	for (const button of document.querySelectorAll(".nav"))
 		button.classList.toggle("active", button.dataset.page === page);
-	if (page === "characters") renderCharacters();
-	else renderPresets();
+	document.querySelector("#page-title").textContent =
+		document.querySelector(".nav.active span").textContent;
+	if (page === "presets") renderPresets();
+	else renderCharacters();
 }
 
 function renderCharacters() {
+	const other = page === "other";
+	const title = other ? "其他 Mod" : "角色列表";
 	if (selectedCharacter) {
 		const character = data.characters.find(
 			(item) => item.name === selectedCharacter,
@@ -76,13 +78,25 @@ function renderCharacters() {
 			renderCharacters();
 			return;
 		}
-		content.innerHTML = `<button class="back" data-action="back">← 返回角色列表</button><div class="page-head"><div><h1>${escapeHtml(character.name)}</h1><p class="subtitle">${character.mods.filter((mod) => mod.enabled).length} 个已启用 · 共 ${character.mods.length} 个 Mod</p></div></div><div class="mod-list">${character.mods.length ? character.mods.map((mod) => `<section class="mod-row ${mod.enabled ? "enabled" : ""}"><div><div class="mod-name">${escapeHtml(mod.name)}</div><div class="mod-status">${mod.enabled ? "已启用" : "已禁用"} · ${mod.files.length} 个 INI · ${mod.bindings.length} 个热键</div></div><div class="mod-actions"><button class="toggle ${mod.enabled ? "on" : ""}" role="switch" aria-label="${escapeHtml(mod.name)}" aria-checked="${mod.enabled}" data-action="toggle" data-mod="${escapeHtml(mod.name)}"></button></div>${mod.bindings.length ? `<div class="bindings">${mod.bindings.map((binding) => `<div class="binding"><span title="${escapeHtml(binding.file)}">${escapeHtml(binding.description)}</span><button title="点击后按下目标键" data-action="capture" data-file="${escapeHtml(binding.file)}" data-section="${escapeHtml(binding.section)}">${escapeHtml(edits.get(`${binding.file}\u0000${binding.section}`) || binding.key)}</button></div>`).join("")}</div>` : ""}</section>`).join("") : `<div class="empty">此角色暂无 Mod。可从上方根目录列表归类，或将 Mod 放入角色目录。</div>`}</div>`;
+		content.innerHTML = `<button class="back" data-action="back">← 返回${title}</button><div class="page-head"><div><h1>${escapeHtml(character.name)}</h1><p class="subtitle">${character.mods.filter((mod) => mod.enabled).length} 个已启用 · 共 ${character.mods.length} 个 Mod</p></div></div><div class="mod-list">${character.mods.length ? character.mods.map((mod) => `<section class="mod-row ${mod.enabled ? "enabled" : ""}"><div><div class="mod-name">${escapeHtml(mod.name)}</div><div class="mod-status">${mod.enabled ? "已启用" : "已禁用"} · ${mod.files.length} 个 INI · ${mod.bindings.length} 个热键</div></div><div class="mod-actions"><button class="toggle ${mod.enabled ? "on" : ""}" role="switch" aria-label="${escapeHtml(mod.name)}" aria-checked="${mod.enabled}" data-action="toggle" data-mod="${escapeHtml(mod.name)}"></button></div>${!other && mod.bindings.length ? `<div class="bindings">${mod.bindings.map((binding) => `<div class="binding"><span title="${escapeHtml(binding.file)}">${escapeHtml(binding.description)}</span><button title="点击后按下目标键" data-action="capture" data-file="${escapeHtml(binding.file)}" data-section="${escapeHtml(binding.section)}">${escapeHtml(edits.get(`${binding.file}\u0000${binding.section}`) || binding.key)}</button></div>`).join("")}</div>` : ""}</section>`).join("") : `<div class="empty">暂无 Mod</div>`}</div>`;
 		return;
 	}
-	const visible = data.characters.filter((character) =>
-		character.name.toLowerCase().includes(search.toLowerCase()),
+	const groups = data.characters.filter(
+		(character) => character.other === other,
 	);
-	content.innerHTML = `<div class="page-head"><div><h1>角色列表</h1><p class="subtitle">按角色整理 Mod · ${data.characters.reduce((sum, character) => sum + character.mods.length, 0)} 个 Mod</p></div><input id="search" class="search" aria-label="搜索角色" placeholder="搜索角色…" value="${escapeHtml(search)}" /></div><form id="add-role" class="inline add-role"><input class="field" name="name" placeholder="新建角色分类" required /><button class="secondary">添加角色</button></form>${data.loose.length ? `<section class="panel"><h2 class="panel-title">待归类的 Mod · ${data.loose.length}</h2><p class="muted">根目录中的 Mod 需要选择角色，归类后便会出现在角色列表中。</p>${data.loose.map((mod) => `<div class="inline"><strong>${escapeHtml(mod.name)}</strong><select aria-label="${escapeHtml(mod.name)}的目标角色" data-loose="${escapeHtml(mod.name)}"><option value="">选择角色</option>${data.characters.map((character) => `<option value="${escapeHtml(character.name)}">${escapeHtml(character.name)}</option>`).join("")}</select><button class="secondary" data-action="move" data-loose="${escapeHtml(mod.name)}">归类</button></div>`).join("")}</section>` : ""}<div class="grid">${visible.map((character) => `<button class="character-card" data-action="character" data-character="${escapeHtml(character.name)}"><div class="card-image" data-cover="${escapeHtml(character.name)}">${escapeHtml(character.name[0])}<span class="card-count">${character.mods.filter((mod) => mod.enabled).length}/${character.mods.length}</span></div><div class="card-name">${escapeHtml(character.name)}</div></button>`).join("")}</div>`;
+	const visible = other
+		? groups
+		: groups.filter((character) =>
+				character.name.toLowerCase().includes(search.toLowerCase()),
+			);
+	const addRole = other
+		? ""
+		: `<form id="add-role" class="inline add-role"><input class="field" name="name" placeholder="新建角色分类" required /><button class="secondary">添加角色</button></form>`;
+	const loosePanel =
+		other && data.loose.length
+			? `<section class="panel"><h2 class="panel-title">待归类的 Mod · ${data.loose.length}</h2>${data.loose.map((mod) => `<div class="inline"><strong>${escapeHtml(mod.name)}</strong><select aria-label="${escapeHtml(mod.name)}的目标分类" data-loose="${escapeHtml(mod.name)}"><option value="">选择分类</option>${data.characters.map((character) => `<option value="${escapeHtml(character.name)}">${escapeHtml(character.name)}</option>`).join("")}</select><button class="secondary" data-action="move" data-loose="${escapeHtml(mod.name)}">归类</button></div>`).join("")}</section>`
+			: "";
+	content.innerHTML = `<div class="page-head"><div><h1>${title}</h1><p class="subtitle">${groups.reduce((sum, character) => sum + character.mods.length, other ? data.loose.length : 0)} 个 Mod</p></div>${other ? "" : `<input id="search" class="search" aria-label="搜索角色" placeholder="搜索角色…" value="${escapeHtml(search)}" />`}</div>${addRole}${loosePanel}<div class="grid">${visible.map((character) => `<button class="character-card${other ? "" : " portrait"}" data-action="character" data-character="${escapeHtml(character.name)}"><div class="card-image" data-cover="${escapeHtml(character.name)}">${escapeHtml(character.name[0])}</div><div class="card-name">${escapeHtml(character.name)}<span class="card-count">${character.mods.filter((mod) => mod.enabled).length}/${character.mods.length} 个 Mod</span></div></button>`).join("")}</div>`;
 	for (const element of content.querySelectorAll("[data-cover]")) {
 		const name = element.dataset.cover;
 		if (!covers.has(name)) covers.set(name, window.iooh.cover(name));
@@ -91,7 +105,7 @@ function renderCharacters() {
 			const image = document.createElement("img");
 			image.src = response.data;
 			image.alt = "";
-			element.prepend(image);
+			element.replaceChildren(image);
 		});
 	}
 }
@@ -112,7 +126,7 @@ function renderPresets() {
 			const expanded = expandedPreset === preset.id;
 			const editing = editingPreset === preset.id;
 			const groups = Object.groupBy(preset.mods, (mod) => mod.character);
-			return `<section class="preset ${data.activePresetId === preset.id ? "active" : ""}"><div class="preset-head"><div><div class="preset-name">${data.activePresetId === preset.id ? "● " : ""}${escapeHtml(preset.name)}</div><div class="preset-meta">${preset.mods.length} 个 Mod · ${Object.keys(groups).length} 个角色${preset.description ? ` · ${escapeHtml(preset.description)}` : ""}</div></div><div class="inline"><button class="secondary" data-action="expand" data-id="${preset.id}">${expanded ? "收起" : "查看"}</button><button class="primary" data-action="apply" data-id="${preset.id}">应用</button></div></div>${
+			return `<section class="preset ${data.activePresetId === preset.id ? "active" : ""}"><div class="preset-head"><div><div class="preset-name">${data.activePresetId === preset.id ? "● " : ""}${escapeHtml(preset.name)}</div><div class="preset-meta">${preset.mods.length} 个 Mod · ${Object.keys(groups).length} 个分类${preset.description ? ` · ${escapeHtml(preset.description)}` : ""}</div></div><div class="inline"><button class="secondary" data-action="expand" data-id="${preset.id}">${expanded ? "收起" : "查看"}</button><button class="primary" data-action="apply" data-id="${preset.id}">应用</button></div></div>${
 				expanded
 					? `<div class="preset-body">${preset.builtin ? "" : `<div class="inline"><button class="secondary" data-action="snapshot" data-id="${preset.id}">更新为当前状态</button><button class="secondary" data-action="edit" data-id="${preset.id}">编辑信息</button><button class="danger" data-action="delete" data-id="${preset.id}">${deletingPreset === preset.id ? "确认删除" : "删除"}</button></div>`}${editing ? `<form id="edit-preset" class="inline" data-id="${preset.id}"><input class="field" name="name" value="${escapeHtml(preset.name)}" required /><input class="field" name="description" value="${escapeHtml(preset.description)}" /><button class="primary">保存</button></form>` : ""}<p class="muted">${preset.mods.length ? "包含的 Mod" : "该预设没有 Mod"}</p><div class="preset-tags">${Object.entries(
 							groups,
@@ -302,7 +316,7 @@ content.addEventListener("click", async (event) => {
 			(select) => select.dataset.loose === loose,
 		)?.value;
 		if (!target) {
-			notify("请选择目标角色", true);
+			notify("请选择目标分类", true);
 			return;
 		}
 		const response = await request(() => window.iooh.moveMod(loose, target));

@@ -4,6 +4,7 @@ import path from "node:path";
 
 const covers = new URL("../assets/covers/", import.meta.url);
 const knownCharacters = new Set(directories(covers).map((item) => item.name));
+const otherNames = new Set(["NPC", "UI", "功能", "大世界"]);
 const marker = "; ===== IOOH 全局开关 =====";
 const markerEnd = "; ===== IOOH 全局开关结束 =====";
 
@@ -41,8 +42,7 @@ function walkIni(folder) {
 	if (!fs.existsSync(folder)) return result;
 	for (const item of fs.readdirSync(folder, { withFileTypes: true })) {
 		const filename = path.join(folder, item.name);
-		if (item.isDirectory() && !isDisabled(item.name))
-			result.push(...walkIni(filename));
+		if (item.isDirectory()) result.push(...walkIni(filename));
 		if (
 			item.isFile() &&
 			item.name.toLowerCase().endsWith(".ini") &&
@@ -223,6 +223,7 @@ export function scan(root, roleNames = []) {
 		}
 		characters.push({
 			name: item.name,
+			other: otherNames.has(item.name),
 			mods: children
 				.filter(
 					(child) =>
@@ -245,7 +246,8 @@ export function scan(root, roleNames = []) {
 		characters.map((character) => [character.name, character]),
 	);
 	for (const name of knownCharacters)
-		if (!byName.has(name)) byName.set(name, { name, mods: [] });
+		if (!byName.has(name))
+			byName.set(name, { name, other: otherNames.has(name), mods: [] });
 	return { characters: [...byName.values()], loose };
 }
 
@@ -294,9 +296,8 @@ export function configure(root, key, edits = [], roleNames = []) {
 	if (existing.length > 1) throw new Error("发现多个 IOOHmod.ini");
 	const { characters } = scan(root, roleNames);
 	const results = [];
-	for (const character of characters)
+	for (const character of characters.filter((character) => !character.other))
 		for (const mod of character.mods) {
-			if (!mod.enabled) continue;
 			for (const filename of mod.files) {
 				const bindings = mod.bindings.filter(
 					(binding) => binding.file === filename,

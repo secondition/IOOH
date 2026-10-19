@@ -12,10 +12,14 @@
       <aside class="sidebar">
         <div class="brand"><img src="./icon.ico" alt="" /> <span>IOOH<small>Mod &amp; Hotkeys</small></span></div>
         <nav aria-label="主导航">
-          <button type="button" class="nav active" data-page="characters">▦ <span>角色列表</span></button>
+          <div class="nav-group">
+            <div class="nav-heading">模组管理</div>
+            <button type="button" class="nav active" data-page="characters">▦ <span>角色列表</span></button>
+            <button type="button" class="nav" data-page="other">▦ <span>其他 Mod</span></button>
+          </div>
           <button type="button" class="nav" data-page="presets">▤ <span>预设配置</span></button>
         </nav>
-        <div class="sidebar-bottom"><div class="sidebar-caption">游戏内全局开关</div><button type="button" id="global-key" class="hotkey" title="点击后按下新按键"></button><div class="sidebar-caption">关闭时，已启用 Mod 的热键均不生效</div><button type="button" id="configure" class="primary full">保存并注入</button><button type="button" id="restore" class="secondary full">恢复 INI 备份</button></div>
+        <div class="sidebar-bottom"><div class="sidebar-caption">游戏内全局开关</div><button type="button" id="global-key" class="hotkey" title="点击后按下新按键"></button><div class="sidebar-caption">关闭时，已加载角色 Mod 的热键不生效</div><button type="button" id="configure" class="primary full">保存并注入</button><button type="button" id="restore" class="secondary full">恢复 INI 备份</button></div>
       </aside>
       <main>
         <header class="toolbar"><div class="crumb">绝区零 <span> / </span> <strong id="page-title">角色列表</strong></div><div class="toolbar-actions"><span id="path-label" title="当前 Mods 目录"></span><button type="button" id="choose-directory" class="secondary">选择 Mods 目录</button></div></header>

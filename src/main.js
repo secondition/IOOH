@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
 import {
 	applyPreset,
 	configure,
@@ -53,6 +53,7 @@ function result(handler) {
 }
 
 app.whenReady().then(() => {
+	Menu.setApplicationMenu(null);
 	settingsPath = path.join(app.getPath("userData"), "settings.json");
 	try {
 		settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -120,7 +121,6 @@ app.whenReady().then(() => {
 			toggleMod(root(), character, mod, enabled);
 			settings.activePresetId = null;
 			save();
-			configure(root(), settings.key, [], settings.roles);
 			return state();
 		}),
 	);
@@ -191,7 +191,6 @@ app.whenReady().then(() => {
 					: settings.presets.find((item) => item.id === id);
 			if (!preset) throw new Error("预设不存在");
 			const changed = applyPreset(root(), preset, state().characters);
-			configure(root(), settings.key, [], settings.roles);
 			settings.activePresetId = id;
 			save();
 			return { changed, state: state() };

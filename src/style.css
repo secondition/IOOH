@@ -61,7 +61,17 @@ button:disabled {
 }
 nav {
 	display: grid;
+	gap: 16px;
+}
+.nav-group {
+	display: grid;
 	gap: 6px;
+}
+.nav-heading {
+	padding: 0 15px 4px;
+	font-size: 12px;
+	font-weight: 700;
+	color: #a1a8bb;
 }
 .nav {
 	text-align: left;
@@ -285,6 +295,16 @@ h1 {
 	transform: translateY(-3px);
 	box-shadow: 0 9px 24px #303c601a;
 }
+.portrait {
+	border: 0;
+	border-radius: 0;
+	overflow: visible;
+	background: transparent;
+	box-shadow: none;
+}
+.portrait:hover {
+	box-shadow: none;
+}
 .card-image {
 	height: 157px;
 	position: relative;
@@ -295,6 +315,11 @@ h1 {
 	color: #fff;
 	font-size: 56px;
 }
+.portrait .card-image {
+	height: auto;
+	aspect-ratio: 1;
+	clip-path: polygon(26% 0, 100% 0, 74% 100%, 0 100%);
+}
 .card-image img {
 	width: 100%;
 	height: 100%;
@@ -303,20 +328,17 @@ h1 {
 .card-image img[src$="M6.png"] {
 	transform: rotate(180deg);
 }
-.card-count {
-	position: absolute;
-	bottom: 8px;
-	right: 9px;
-	background: #253146c9;
-	color: white;
-	border-radius: 6px;
-	padding: 3px 7px;
-	font-size: 11px;
-}
 .card-name {
 	padding: 12px 8px;
 	font-weight: 650;
 	font-size: 14px;
+}
+.card-count {
+	display: block;
+	margin-top: 4px;
+	color: #9199ac;
+	font-size: 12px;
+	font-weight: 400;
 }
 .back {
 	color: #7063de;

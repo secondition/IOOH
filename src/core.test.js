@@ -41,12 +41,29 @@ test("角色归类、预设切换与全局热键注入", () => {
 	const toolIni = path.join(root, "功能", "iooh", "IOOHmod.ini");
 	fs.mkdirSync(path.dirname(toolIni), { recursive: true });
 	fs.writeFileSync(toolIni, "; IOOH");
-	assert.equal(
-		scan(root).characters.find((char) => char.name === "功能").mods.length,
-		0,
+	const otherIni = path.join(root, "功能", "辅助 Mod", "mod.ini");
+	fs.mkdirSync(path.dirname(otherIni));
+	fs.writeFileSync(otherIni, "[KeyOther]\nkey=4\n");
+	const disabledIni = path.join(
+		root,
+		"安比",
+		"DISABLED 备用 Mod",
+		"DISABLED_资源",
+		"mod.ini",
 	);
-	assert.equal(configure(root, "VK_NUMPAD2"), 2);
-	assert.equal(configure(root, "VK_NUMPAD2"), 2);
+	fs.mkdirSync(path.dirname(disabledIni), { recursive: true });
+	fs.writeFileSync(disabledIni, "[KeyAlt]\nkey=3\n");
+	assert.equal(
+		scan(root).characters.find((char) => char.name === "功能").other,
+		true,
+	);
+	assert.equal(configure(root, "VK_NUMPAD2"), 3);
+	assert.equal(configure(root, "VK_NUMPAD2"), 3);
+	assert.match(
+		fs.readFileSync(disabledIni, "utf8"),
+		/condition = \$iooh_en == 1/,
+	);
+	assert.equal(fs.readFileSync(otherIni, "utf8"), "[KeyOther]\nkey=4\n");
 	const text = fs.readFileSync(
 		path.join(root, "安比", "外观 Mod", "mod.ini"),
 		"utf8",
@@ -75,7 +92,6 @@ test("角色归类、预设切换与全局热键注入", () => {
 	);
 	applyPreset(root, preset, scan(root).characters);
 	assert.equal(fs.existsSync(path.join(root, "安比", "外观 Mod")), true);
-	fs.mkdirSync(path.join(root, "安比", "DISABLED 备用 Mod"));
 	assert.equal(
 		scan(root)
 			.characters.find((char) => char.name === "安比")
