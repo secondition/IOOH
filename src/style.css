@@ -139,6 +139,9 @@ main {
 	overflow-y: auto;
 }
 .toolbar {
+	position: sticky;
+	top: 0;
+	z-index: 2;
 	min-height: 78px;
 	background: white;
 	border-bottom: 1px solid #e9eaf2;
@@ -218,6 +221,14 @@ h1 {
 }
 .category-section + .category-section {
 	margin-top: 36px;
+}
+.section-controls {
+	position: sticky;
+	top: 78px;
+	z-index: 1;
+	display: flow-root;
+	padding-top: 10px;
+	background: #f6f7fb;
 }
 .section-title {
 	margin: 0;
