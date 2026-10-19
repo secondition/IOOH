@@ -1,6 +1,6 @@
 {
 	"name": "IOOH",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"productName": "IOOH",
 	"description": "Mod presets and global hotkey control",
 	"main": "src/main.js",
@@ -15,6 +15,7 @@
 		"files": [
 			"index.html",
 			"icon.ico",
+			"icon.png",
 			"src/**/*",
 			"assets/**/*",
 			"package.json"
