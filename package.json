@@ -20,8 +20,11 @@
 			"package.json"
 		],
 		"win": {
-			"target": "portable",
 			"icon": "icon.ico"
+		},
+		"nsis": {
+			"oneClick": false,
+			"allowToChangeInstallationDirectory": true
 		}
 	},
 	"devEngines": {

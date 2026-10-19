@@ -11,7 +11,7 @@ IOOH 用角色列表管理绝区零的 3DMigoto Mod，并通过预设保存和�
 
 ## 使用方法
 
-1. 运行发行版，选择游戏使用的 Mods 目录。
+1. 运行安装包，安装完成后启动 IOOH，选择游戏使用的 Mods 目录。
 2. 在角色列表中管理 Mod；新建预设会保存当前启用的 Mod，应用预设会立即切换文件夹的启用状态。
 3. 如需调整热键，点击热键并按下新按键，然后点击「保存并注入」。首次使用时也需要点击一次「保存并注入」，生成游戏内的 `IOOHmod.ini`。
 4. 游戏内按小键盘 2 启用或禁用全部已注入的 Mod 热键；可以在侧栏修改全局开关键。
@@ -20,7 +20,7 @@ IOOH 用角色列表管理绝区零的 3DMigoto Mod，并通过预设保存和�
 
 ## 开发
 
-使用 `pnpm install` 安装依赖，`pnpm start` 启动应用，`pnpm check` 检查代码，`pnpm build` 生成 Windows 便携版。
+使用 `pnpm install` 安装依赖，`pnpm start` 启动应用，`pnpm check` 检查代码，`pnpm build` 生成可选择安装目录的 Windows 安装包。
 
 
 ## AI 辅助开发说明
