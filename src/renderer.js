@@ -1,10 +1,11 @@
 let data = { characters: [], loose: [], presets: [], key: "VK_NUMPAD2" };
-let page = "characters";
+let page = "mods";
 let selectedCharacter = null;
 let expandedPreset = null;
 let editingPreset = null;
 let deletingPreset = null;
 let search = "";
+let populatedOnly = false;
 let capture = null;
 let busy = false;
 const edits = new Map();
@@ -63,40 +64,35 @@ function render() {
 	document.querySelector("#page-title").textContent =
 		document.querySelector(".nav.active span").textContent;
 	if (page === "presets") renderPresets();
-	else renderCharacters();
+	else renderMods();
 }
 
-function renderCharacters() {
-	const other = page === "other";
-	const title = other ? "其他 Mod" : "角色列表";
+function renderMods() {
 	if (selectedCharacter) {
 		const character = data.characters.find(
 			(item) => item.name === selectedCharacter,
 		);
 		if (!character) {
 			selectedCharacter = null;
-			renderCharacters();
+			renderMods();
 			return;
 		}
-		content.innerHTML = `<button class="back" data-action="back">← 返回${title}</button><div class="page-head"><div><h1>${escapeHtml(character.name)}</h1><p class="subtitle">${character.mods.filter((mod) => mod.enabled).length} 个已启用 · 共 ${character.mods.length} 个 Mod</p></div></div><div class="mod-list">${character.mods.length ? character.mods.map((mod) => `<section class="mod-row ${mod.enabled ? "enabled" : ""}"><div><div class="mod-name">${escapeHtml(mod.name)}</div><div class="mod-status">${mod.enabled ? "已启用" : "已禁用"} · ${mod.files.length} 个 INI · ${mod.bindings.length} 个热键</div></div><div class="mod-actions"><button class="toggle ${mod.enabled ? "on" : ""}" role="switch" aria-label="${escapeHtml(mod.name)}" aria-checked="${mod.enabled}" data-action="toggle" data-mod="${escapeHtml(mod.name)}"></button></div>${!other && mod.bindings.length ? `<div class="bindings">${mod.bindings.map((binding) => `<div class="binding"><span title="${escapeHtml(binding.file)}">${escapeHtml(binding.description)}</span><button title="点击后按下目标键" data-action="capture" data-file="${escapeHtml(binding.file)}" data-section="${escapeHtml(binding.section)}">${escapeHtml(edits.get(`${binding.file}\u0000${binding.section}`) || binding.key)}</button></div>`).join("")}</div>` : ""}</section>`).join("") : `<div class="empty">暂无 Mod</div>`}</div>`;
+		content.innerHTML = `<button class="back" data-action="back">← 返回模组列表</button><div class="page-head"><div><h1>${escapeHtml(character.name)}</h1><p class="subtitle">${character.mods.filter((mod) => mod.enabled).length} 个已启用 · 共 ${character.mods.length} 个 Mod</p></div></div><div class="mod-list">${character.mods.length ? character.mods.map((mod) => `<section class="mod-row ${mod.enabled ? "enabled" : ""}"><div><div class="mod-name">${escapeHtml(mod.name)}</div><div class="mod-status">${mod.enabled ? "已启用" : "已禁用"} · ${mod.files.length} 个 INI · ${mod.bindings.length} 个热键</div></div><div class="mod-actions"><button class="toggle ${mod.enabled ? "on" : ""}" role="switch" aria-label="${escapeHtml(mod.name)}" aria-checked="${mod.enabled}" data-action="toggle" data-mod="${escapeHtml(mod.name)}"></button></div>${!character.other && mod.bindings.length ? `<div class="bindings">${mod.bindings.map((binding) => `<div class="binding"><span title="${escapeHtml(binding.file)}">${escapeHtml(binding.description)}</span><button title="点击后按下目标键" data-action="capture" data-file="${escapeHtml(binding.file)}" data-section="${escapeHtml(binding.section)}">${escapeHtml(edits.get(`${binding.file}\u0000${binding.section}`) || binding.key)}</button></div>`).join("")}</div>` : ""}</section>`).join("") : `<div class="empty">暂无 Mod</div>`}</div>`;
 		return;
 	}
-	const groups = data.characters.filter(
-		(character) => character.other === other,
+	const other = data.characters.filter((character) => character.other);
+	const roles = data.characters.filter((character) => !character.other);
+	const visible = roles.filter(
+		(character) =>
+			(!populatedOnly || character.mods.length) &&
+			character.name.toLowerCase().includes(search.toLowerCase()),
 	);
-	const visible = other
-		? groups
-		: groups.filter((character) =>
-				character.name.toLowerCase().includes(search.toLowerCase()),
-			);
-	const addRole = other
-		? ""
-		: `<form id="add-role" class="inline add-role"><input class="field" name="name" placeholder="新建角色分类" required /><button class="secondary">添加角色</button></form>`;
-	const loosePanel =
-		other && data.loose.length
-			? `<section class="panel"><h2 class="panel-title">待归类的 Mod · ${data.loose.length}</h2>${data.loose.map((mod) => `<div class="inline"><strong>${escapeHtml(mod.name)}</strong><select aria-label="${escapeHtml(mod.name)}的目标分类" data-loose="${escapeHtml(mod.name)}"><option value="">选择分类</option>${data.characters.map((character) => `<option value="${escapeHtml(character.name)}">${escapeHtml(character.name)}</option>`).join("")}</select><button class="secondary" data-action="move" data-loose="${escapeHtml(mod.name)}">归类</button></div>`).join("")}</section>`
-			: "";
-	content.innerHTML = `<div class="page-head"><div><h1>${title}</h1><p class="subtitle">${groups.reduce((sum, character) => sum + character.mods.length, other ? data.loose.length : 0)} 个 Mod</p></div>${other ? "" : `<input id="search" class="search" aria-label="搜索角色" placeholder="搜索角色…" value="${escapeHtml(search)}" />`}</div>${addRole}${loosePanel}<div class="grid">${visible.map((character) => `<button class="character-card${other ? "" : " portrait"}" data-action="character" data-character="${escapeHtml(character.name)}"><div class="card-image" data-cover="${escapeHtml(character.name)}">${escapeHtml(character.name[0])}</div><div class="card-name">${escapeHtml(character.name)}<span class="card-count">${character.mods.filter((mod) => mod.enabled).length}/${character.mods.length} 个 Mod</span></div></button>`).join("")}</div>`;
+	const cards = (characters) =>
+		`<div class="grid">${characters.map((character) => `<button class="character-card${character.other ? "" : " portrait"}" data-action="character" data-character="${escapeHtml(character.name)}"><div class="card-image" data-cover="${escapeHtml(character.name)}">${escapeHtml(character.name[0])}</div><div class="card-name">${escapeHtml(character.name)}<span class="card-count">${character.mods.filter((mod) => mod.enabled).length}/${character.mods.length} 个 Mod</span></div></button>`).join("")}</div>`;
+	const loosePanel = data.loose.length
+		? `<section class="panel"><h2 class="panel-title">待归类的 Mod · ${data.loose.length}</h2>${data.loose.map((mod) => `<div class="inline"><strong>${escapeHtml(mod.name)}</strong><select aria-label="${escapeHtml(mod.name)}的目标分类" data-loose="${escapeHtml(mod.name)}"><option value="">选择分类</option>${data.characters.map((character) => `<option value="${escapeHtml(character.name)}">${escapeHtml(character.name)}</option>`).join("")}</select><button class="secondary" data-action="move" data-loose="${escapeHtml(mod.name)}">归类</button></div>`).join("")}</section>`
+		: "";
+	content.innerHTML = `<div class="page-head"><div><h1>模组列表</h1><p class="subtitle">${data.characters.reduce((sum, character) => sum + character.mods.length, data.loose.length)} 个 Mod</p></div></div><section class="category-section"><div class="page-head"><h2 class="section-title">其他模组</h2></div>${loosePanel}${cards(other)}</section><section class="category-section"><div class="page-head"><h2 class="section-title">角色列表</h2><div class="inline role-filters"><label class="checkbox"><input type="checkbox" id="populated-only" ${populatedOnly ? "checked" : ""} />仅显示有 Mod 的角色</label><input id="search" class="search" aria-label="搜索角色" placeholder="搜索角色…" value="${escapeHtml(search)}" /></div></div><form id="add-role" class="inline add-role"><input class="field" name="name" placeholder="新建角色分类" required /><button class="secondary">添加角色</button></form>${visible.length ? cards(visible) : '<div class="empty">暂无符合条件的角色</div>'}</section>`;
 	for (const element of content.querySelectorAll("[data-cover]")) {
 		const name = element.dataset.cover;
 		if (!covers.has(name)) covers.set(name, window.iooh.cover(name));
@@ -231,10 +227,15 @@ for (const button of document.querySelectorAll(".nav"))
 	});
 
 content.addEventListener("input", (event) => {
+	if (event.target.id === "populated-only") {
+		populatedOnly = event.target.checked;
+		renderMods();
+		return;
+	}
 	if (event.target.id !== "search") return;
 	search = event.target.value;
 	const position = event.target.selectionStart;
-	renderCharacters();
+	renderMods();
 	const input = document.querySelector("#search");
 	input.focus();
 	input.setSelectionRange(position, position);

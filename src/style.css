@@ -28,7 +28,7 @@ button:disabled {
 }
 .app {
 	display: flex;
-	min-height: 100vh;
+	height: 100vh;
 }
 .sidebar {
 	width: 220px;
@@ -61,17 +61,7 @@ button:disabled {
 }
 nav {
 	display: grid;
-	gap: 16px;
-}
-.nav-group {
-	display: grid;
 	gap: 6px;
-}
-.nav-heading {
-	padding: 0 15px 4px;
-	font-size: 12px;
-	font-weight: 700;
-	color: #a1a8bb;
 }
 .nav {
 	text-align: left;
@@ -146,6 +136,7 @@ nav {
 main {
 	flex: 1;
 	min-width: 0;
+	overflow-y: auto;
 }
 .toolbar {
 	min-height: 78px;
@@ -225,6 +216,13 @@ h1 {
 	color: #939caf;
 	font-size: 13px;
 }
+.category-section + .category-section {
+	margin-top: 36px;
+}
+.section-title {
+	margin: 0;
+	font-size: 20px;
+}
 .search,
 .field {
 	width: 100%;
@@ -236,6 +234,14 @@ h1 {
 }
 .search {
 	width: 220px;
+}
+.checkbox {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+	font-size: 13px;
+	color: #5b657b;
 }
 .panel {
 	background: #fff;
