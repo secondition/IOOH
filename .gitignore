@@ -1,18 +1,5 @@
-# Electron
+# Dependencies
 /node_modules/
-/QAQManagerV4/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Virtual Environment
-venv/
-env/
-ENV/
 
 # IDE
 .vscode/
@@ -24,15 +11,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Generated files（运行时生成，不入库）
+# Generated files
 *.log
-xxmi_key_config.json
 IOOHmod.ini
 
 # Build artifacts
-build/
-dist/
-
-# Python local virtual environments
-.venv/
-/参考项目
+/dist/
