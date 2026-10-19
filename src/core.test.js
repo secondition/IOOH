@@ -3,7 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { applyPreset, configure, createPreset, moveMod, scan } from "./core.js";
+import {
+	applyPreset,
+	configure,
+	coverPath,
+	createPreset,
+	moveMod,
+	scan,
+} from "./core.js";
 
 test("角色归类、预设切换与全局热键注入", () => {
 	using temp = fs.mkdtempDisposableSync(path.join(os.tmpdir(), "iooh-"));
@@ -29,6 +36,8 @@ test("角色归类、预设切换与全局热键注入", () => {
 		scan(root).characters.some((char) => char.name === "零号·安比"),
 		true,
 	);
+	assert.match(coverPath("安比").pathname, /AnbyM6\.png$/);
+	assert.match(coverPath("女主").pathname, /_cover\.webp$/);
 	const toolIni = path.join(root, "功能", "iooh", "IOOHmod.ini");
 	fs.mkdirSync(path.dirname(toolIni), { recursive: true });
 	fs.writeFileSync(toolIni, "; IOOH");

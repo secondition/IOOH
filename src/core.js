@@ -2,13 +2,8 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const roster = JSON.parse(
-	fs.readFileSync(
-		new URL("../assets/character-config.json", import.meta.url),
-		"utf8",
-	),
-);
-const knownCharacters = new Set(roster.defaultCharacters);
+const covers = new URL("../assets/covers/", import.meta.url);
+const knownCharacters = new Set(directories(covers).map((item) => item.name));
 const marker = "; ===== IOOH 全局开关 =====";
 const markerEnd = "; ===== IOOH 全局开关结束 =====";
 
@@ -249,7 +244,7 @@ export function scan(root, roleNames = []) {
 	const byName = new Map(
 		characters.map((character) => [character.name, character]),
 	);
-	for (const name of roster.defaultCharacters)
+	for (const name of knownCharacters)
 		if (!byName.has(name)) byName.set(name, { name, mods: [] });
 	return { characters: [...byName.values()], loose };
 }
@@ -449,10 +444,12 @@ export function applyPreset(root, preset, characters) {
 
 export function coverPath(character) {
 	safeName(character);
-	const folder = new URL(
-		`../assets/covers/${encodeURIComponent(character)}/`,
-		import.meta.url,
-	);
+	const folder = new URL(`${encodeURIComponent(character)}/`, covers);
+	if (!fs.existsSync(folder)) return null;
+	const mindscape = fs
+		.readdirSync(folder)
+		.find((name) => name.endsWith("M6.png"));
+	if (mindscape) return new URL(encodeURIComponent(mindscape), folder);
 	for (const extension of ["png", "jpg", "jpeg", "webp"]) {
 		const file = new URL(`_cover.${extension}`, folder);
 		if (fs.existsSync(file)) return file;

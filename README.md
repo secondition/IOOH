@@ -20,7 +20,7 @@ IOOH 用角色列表管理绝区零的 3DMigoto Mod，并通过预设保存和�
 
 ## 开发
 
-使用 `pnpm install` 安装依赖，`pnpm start` 启动应用，`pnpm check` 检查代码，`pnpm build` 生成可选择安装目录的 Windows 安装包。
+使用 `pnpm install` 安装依赖，`pnpm start` 启动应用，`pnpm check` 检查代码，`pnpm build` 生成可选择安装目录的 Windows 安装包。默认角色列表来自 `assets/covers/` 的子文件夹；M6 图片放在对应目录，文件名以 `M6.png` 结尾。
 
 
 ## AI 辅助开发说明
